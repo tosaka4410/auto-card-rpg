@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5aeb978bf302e0a4b8b8ee954a37e541, type: 3}
+  m_Name: Attack
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyPreset
+  enemyName: Attack
+  maxHp: 40
+  skills:
+  - {fileID: 11400000, guid: 2f0a552b5a9e7474cb10049910ef8827, type: 2}
+  - {fileID: 11400000, guid: 0189d3aca38bb5b4f871dff185db0b21, type: 2}
+  - {fileID: 11400000, guid: a714774535be7b3469c1745d7edc69fc, type: 2}
