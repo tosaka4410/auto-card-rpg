@@ -18,11 +18,21 @@ public class GameUI : MonoBehaviour
     [SerializeField] private Button startBattleButton;
 
     [Header("Battle")]
+    [SerializeField] private Text enemyNameText;
+    [SerializeField] private Slider enemyHpSlider;
+    [SerializeField] private Text enemyHpText;
+    [SerializeField] private Text playerNameText;
+    [SerializeField] private Slider playerHpSlider;
+    [SerializeField] private Text playerHpText;
+    [SerializeField] private Text turnText;
     [SerializeField] private Text statusText;
     [SerializeField] private Text turnDetailText;
     [SerializeField] private Text logText;
     [SerializeField] private ScrollRect logScroll;
     [SerializeField] private Button nextButton;
+
+    private int playerMaxHp;
+    private int enemyMaxHp;
 
     private readonly List<Button> spawnedOfferButtons = new();
 
@@ -79,6 +89,15 @@ public class GameUI : MonoBehaviour
         shopPanel.SetActive(false);
         battlePanel.SetActive(true);
 
+        playerMaxHp = Mathf.Max(playerHp, 1);
+        enemyMaxHp = Mathf.Max(enemyHp, 1);
+
+        if (playerNameText != null) playerNameText.text = "PLAYER";
+        if (enemyNameText != null) enemyNameText.text = enemyName;
+
+        UpdateHpUi(playerHp, enemyHp);
+        if (turnText != null) turnText.text = "Turn: 0";
+
         if (statusText != null)
             statusText.text = $"ENEMY: {enemyName}\nP HP: {playerHp} / E HP: {enemyHp}";
 
@@ -104,6 +123,9 @@ public class GameUI : MonoBehaviour
         int damageToPlayer
     )
     {
+        UpdateHpUi(playerHp, enemyHp);
+        if (turnText != null) turnText.text = $"Turn: {turn}";
+
         if (statusText != null)
             statusText.text = $"Turn: {turn}\nP HP: {playerHp} / E HP: {enemyHp}";
 
@@ -124,6 +146,7 @@ public class GameUI : MonoBehaviour
     public void ShowBattleEnd(bool playerWin)
     {
         AppendLog(playerWin ? "\n=== WIN ===\n" : "\n=== LOSE ===\n");
+        if (turnText != null) turnText.text += playerWin ? "  (WIN)" : "  (LOSE)";
         if (nextButton != null) nextButton.interactable = true;
     }
 
@@ -138,6 +161,24 @@ public class GameUI : MonoBehaviour
     {
         if (logText != null) logText.text += s;
         ScrollToBottom();
+    }
+
+    private void UpdateHpUi(int playerHp, int enemyHp)
+    {
+        UpdateSingleHp(playerHpSlider, playerHpText, playerHp, playerMaxHp);
+        UpdateSingleHp(enemyHpSlider, enemyHpText, enemyHp, enemyMaxHp);
+    }
+
+    private static void UpdateSingleHp(Slider slider, Text label, int hp, int maxHp)
+    {
+        if (slider != null)
+        {
+            slider.maxValue = maxHp;
+            slider.value = Mathf.Clamp(hp, 0, maxHp);
+        }
+
+        if (label != null)
+            label.text = $"HP {Mathf.Clamp(hp, 0, maxHp)}/{maxHp}";
     }
 
     private void ScrollToBottom()
