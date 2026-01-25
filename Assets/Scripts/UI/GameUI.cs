@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -9,70 +10,125 @@ public class GameUI : MonoBehaviour
     [SerializeField] private GameObject shopPanel;
     [SerializeField] private GameObject battlePanel;
 
-    [Header("Shop")]
-    [SerializeField] private Transform offersRoot;
-    [SerializeField] private Button offerButtonPrefab;
-    [SerializeField] private Text ownedSkillsText;
-    [SerializeField] private Text shopInfoText;
-    [SerializeField] private Button rerollButton;
-    [SerializeField] private Button startBattleButton;
-
-    [Header("Battle")]
-    [SerializeField] private Text enemyNameText;
-    [SerializeField] private Slider enemyHpSlider;
-    [SerializeField] private Text enemyHpText;
-    [SerializeField] private Text playerNameText;
-    [SerializeField] private Slider playerHpSlider;
-    [SerializeField] private Text playerHpText;
-    [SerializeField] private Text turnText;
-    [SerializeField] private Text statusText;
-    [SerializeField] private Text turnDetailText;
-    [SerializeField] private Text logText;
-    [SerializeField] private ScrollRect logScroll;
+    [Header("Common")]
     [SerializeField] private Button nextButton;
 
-    private int playerMaxHp;
-    private int enemyMaxHp;
+    // ===== Shop =====
+    [Header("Shop - Header")]
+    [SerializeField] private Text shopHeaderText; // grade/coins/upgradeCostなど
 
-    private readonly List<Button> spawnedOfferButtons = new();
+    [Header("Shop - Offer List")]
+    [SerializeField] private Transform offerRoot;
+    [SerializeField] private Button offerButtonPrefab;
 
+    [Header("Shop - Owned List")]
+    [SerializeField] private Transform ownedRoot;
+    [SerializeField] private Button ownedButtonPrefab;
+
+    [Header("Shop - Buttons")]
+    [SerializeField] private Button rerollButton;
+    [SerializeField] private Button upgradeButton;
+    [SerializeField] private Button startBattleButton;
+
+    // ===== Battle =====
+    [Header("Battle - Header")]
+    [SerializeField] private Text battleHeaderText; // enemyName, turn etc
+    [SerializeField] private Text hpText;           // P/E HP
+    [SerializeField] private Text pickedText;       // picked skills names
+    [SerializeField] private Text statText;         // atk/def/fatigue/damage
+    [SerializeField] private Text logText;          // accumulated log (optional)
+
+    private readonly List<Button> offerButtons = new();
+    private readonly List<Button> ownedButtons = new();
+
+    private Action onNext;
+
+    // -------------- Public API --------------
+
+    public void BindNextButton(Action onClick)
+    {
+        onNext = onClick;
+        if (nextButton != null)
+        {
+            nextButton.onClick.RemoveAllListeners();
+            nextButton.onClick.AddListener(() => onNext?.Invoke());
+        }
+    }
+
+    /// <summary>
+    /// Shop画面表示（コイン/アップグレード込み）
+    /// </summary>
     public void ShowShop(
         int shopGrade,
+        int coins,
+        int upgradeCost,
+        int buyCost,
+        int sellGain,
         IReadOnlyList<SkillData> offers,
-        IReadOnlyList<SkillData> ownedSkills,
+        IReadOnlyList<SkillData> owned,
         Action<int> onPickOffer,
         Action onReroll,
+        Action onUpgrade,
+        Action<int> onSellOwned,
         Action onStartBattle
     )
     {
-        shopPanel.SetActive(true);
-        battlePanel.SetActive(false);
+        SetPanel(shop: true);
 
-        if (shopInfoText != null)
-            shopInfoText.text = $"SHOP GRADE: {shopGrade} / OFFERS: {offers.Count}";
-
-        if (ownedSkillsText != null)
-            ownedSkillsText.text = "OWNED (max 7):\n- " + string.Join("\n- ", SkillsToNames(ownedSkills));
-
-        ClearOfferButtons();
-        for (int i = 0; i < offers.Count; i++)
+        // Header
+        if (shopHeaderText != null)
         {
-            int index = i;
-
-            var btn = Instantiate(offerButtonPrefab, offersRoot);
-            spawnedOfferButtons.Add(btn);
-
-            var label = btn.GetComponentInChildren<Text>();
-            if (label != null) label.text = FormatSkillLine(offers[i]);
-
-            btn.onClick.RemoveAllListeners();
-            btn.onClick.AddListener(() => onPickOffer?.Invoke(index));
+            shopHeaderText.text =
+                $"SHOP GRADE: {shopGrade}\n" +
+                $"COINS: {coins}\n" +
+                $"UPGRADE COST: {(shopGrade >= 6 ? "-" : upgradeCost)}\n" +
+                $"BUY: -{buyCost}  SELL: +{sellGain}";
         }
 
+        // Offer list
+        RebuildButtons(
+            offerRoot,
+            offerButtonPrefab,
+            offerButtons,
+            offers.Count,
+            (i, btn) =>
+            {
+                var s = offers[i];
+                btn.GetComponentInChildren<Text>().text = FormatSkillLine(s, prefix: $"BUY(-{buyCost}) ");
+                btn.onClick.RemoveAllListeners();
+                btn.onClick.AddListener(() => onPickOffer?.Invoke(i));
+                btn.interactable = (s != null); // coins条件はController側で弾く想定
+            }
+        );
+
+        // Owned list (Sell)
+        RebuildButtons(
+            ownedRoot,
+            ownedButtonPrefab,
+            ownedButtons,
+            owned.Count,
+            (i, btn) =>
+            {
+                var s = owned[i];
+                btn.GetComponentInChildren<Text>().text = FormatSkillLine(s, prefix: $"SELL(+{sellGain}) ");
+                btn.onClick.RemoveAllListeners();
+                btn.onClick.AddListener(() => onSellOwned?.Invoke(i));
+                btn.interactable = (s != null);
+            }
+        );
+
+        // Buttons
         if (rerollButton != null)
         {
             rerollButton.onClick.RemoveAllListeners();
             rerollButton.onClick.AddListener(() => onReroll?.Invoke());
+        }
+
+        if (upgradeButton != null)
+        {
+            upgradeButton.onClick.RemoveAllListeners();
+            upgradeButton.onClick.AddListener(() => onUpgrade?.Invoke());
+            upgradeButton.interactable = shopGrade < 6; // coins条件はController側で弾く想定
         }
 
         if (startBattleButton != null)
@@ -81,41 +137,38 @@ public class GameUI : MonoBehaviour
             startBattleButton.onClick.AddListener(() => onStartBattle?.Invoke());
         }
 
-        if (nextButton != null) nextButton.interactable = false;
+        // Nextボタンはショップでは基本不要（必要なら表示切替）
+        if (nextButton != null) nextButton.gameObject.SetActive(false);
     }
 
+    /// <summary>
+    /// バトル開始表示
+    /// </summary>
     public void ShowBattleStart(string enemyName, int playerHp, int enemyHp)
     {
-        shopPanel.SetActive(false);
-        battlePanel.SetActive(true);
+        SetPanel(shop: false);
 
-        playerMaxHp = Mathf.Max(playerHp, 1);
-        enemyMaxHp = Mathf.Max(enemyHp, 1);
+        if (battleHeaderText != null) battleHeaderText.text = $"BATTLE vs {enemyName}";
+        if (hpText != null) hpText.text = $"P:{playerHp}  E:{enemyHp}";
 
-        if (playerNameText != null) playerNameText.text = "PLAYER";
-        if (enemyNameText != null) enemyNameText.text = enemyName;
+        if (pickedText != null) pickedText.text = "";
+        if (statText != null) statText.text = "";
+        if (logText != null) logText.text = "";
 
-        UpdateHpUi(playerHp, enemyHp);
-        if (turnText != null) turnText.text = "Turn: 0";
-
-        if (statusText != null)
-            statusText.text = $"ENEMY: {enemyName}\nP HP: {playerHp} / E HP: {enemyHp}";
-
-        if (turnDetailText != null) turnDetailText.text = "";
-        if (logText != null) logText.text = "=== BATTLE START ===\n";
-
-        ScrollToBottom();
-        if (nextButton != null) nextButton.interactable = false;
+        if (nextButton != null) nextButton.gameObject.SetActive(false);
     }
 
+    /// <summary>
+    /// 毎ターン更新
+    /// </summary>
     public void UpdateBattleTurn(
         int turn,
         int playerHp,
         int enemyHp,
-        string playerPicked,
+        string playerPickedNames,
         int playerAtk,
         int playerDef,
-        string enemyPicked,
+        string enemyPickedNames,
         int enemyAtk,
         int enemyDef,
         int fatigue,
@@ -123,92 +176,93 @@ public class GameUI : MonoBehaviour
         int damageToPlayer
     )
     {
-        UpdateHpUi(playerHp, enemyHp);
-        if (turnText != null) turnText.text = $"Turn: {turn}";
+        if (battleHeaderText != null) battleHeaderText.text = $"TURN {turn}";
+        if (hpText != null) hpText.text = $"P:{playerHp}  E:{enemyHp}";
 
-        if (statusText != null)
-            statusText.text = $"Turn: {turn}\nP HP: {playerHp} / E HP: {enemyHp}";
-
-        if (turnDetailText != null)
+        if (pickedText != null)
         {
-            turnDetailText.text =
-                $"[PLAYER] {playerPicked}\nATK:{playerAtk} DEF:{playerDef}  dmg->E:{damageToEnemy}\n" +
-                $"[ENEMY ] {enemyPicked}\nATK:{enemyAtk} DEF:{enemyDef}  dmg->P:{damageToPlayer}\n" +
+            pickedText.text =
+                $"PLAYER PICKED:\n{playerPickedNames}\n\n" +
+                $"ENEMY PICKED:\n{enemyPickedNames}";
+        }
+
+        if (statText != null)
+        {
+            statText.text =
+                $"P ATK:{playerAtk} DEF:{playerDef} -> DMG:{damageToEnemy}\n" +
+                $"E ATK:{enemyAtk} DEF:{enemyDef} -> DMG:{damageToPlayer}\n" +
                 $"FATIGUE:{fatigue}";
         }
 
-        AppendLog(
-            $"T{turn} | P({playerAtk}-{playerDef}) -> E:{damageToEnemy} | " +
-            $"E({enemyAtk}-{enemyDef}) -> P:{damageToPlayer} | FAT:{fatigue}\n"
-        );
-    }
-
-    public void ShowBattleEnd(bool playerWin)
-    {
-        AppendLog(playerWin ? "\n=== WIN ===\n" : "\n=== LOSE ===\n");
-        if (turnText != null) turnText.text += playerWin ? "  (WIN)" : "  (LOSE)";
-        if (nextButton != null) nextButton.interactable = true;
-    }
-
-    public void BindNextButton(Action onNext)
-    {
-        if (nextButton == null) return;
-        nextButton.onClick.RemoveAllListeners();
-        nextButton.onClick.AddListener(() => onNext?.Invoke());
-    }
-
-    private void AppendLog(string s)
-    {
-        if (logText != null) logText.text += s;
-        ScrollToBottom();
-    }
-
-    private void UpdateHpUi(int playerHp, int enemyHp)
-    {
-        UpdateSingleHp(playerHpSlider, playerHpText, playerHp, playerMaxHp);
-        UpdateSingleHp(enemyHpSlider, enemyHpText, enemyHp, enemyMaxHp);
-    }
-
-    private static void UpdateSingleHp(Slider slider, Text label, int hp, int maxHp)
-    {
-        if (slider != null)
+        if (logText != null)
         {
-            slider.maxValue = maxHp;
-            slider.value = Mathf.Clamp(hp, 0, maxHp);
+            logText.text +=
+                $"T{turn}: P({playerAtk}-{playerDef})=>{damageToEnemy} / " +
+                $"E({enemyAtk}-{enemyDef})=>{damageToPlayer} / F={fatigue}\n";
+        }
+    }
+
+    /// <summary>
+    /// 終了表示（Nextボタンでショップへ戻す想定）
+    /// </summary>
+    public void ShowBattleEnd(bool win)
+    {
+        if (battleHeaderText != null)
+            battleHeaderText.text = win ? "WIN!" : "LOSE...";
+
+        if (nextButton != null)
+        {
+            nextButton.gameObject.SetActive(true);
+            // BindNextButtonで設定済みの onNext が呼ばれる
+        }
+    }
+
+    // -------------- Helpers --------------
+
+    private void SetPanel(bool shop)
+    {
+        if (shopPanel != null) shopPanel.SetActive(shop);
+        if (battlePanel != null) battlePanel.SetActive(!shop);
+    }
+
+    private void RebuildButtons(
+        Transform root,
+        Button prefab,
+        List<Button> cache,
+        int needed,
+        Action<int, Button> bind
+    )
+    {
+        if (root == null || prefab == null) return;
+
+        // 足りない分生成
+        while (cache.Count < needed)
+        {
+            var btn = Instantiate(prefab, root);
+            cache.Add(btn);
         }
 
-        if (label != null)
-            label.text = $"HP {Mathf.Clamp(hp, 0, maxHp)}/{maxHp}";
-    }
-
-    private void ScrollToBottom()
-    {
-        if (logScroll == null) return;
-        Canvas.ForceUpdateCanvases();
-        logScroll.verticalNormalizedPosition = 0f;
-        Canvas.ForceUpdateCanvases();
-    }
-
-    private void ClearOfferButtons()
-    {
-        foreach (var b in spawnedOfferButtons)
+        // 余りは非表示
+        for (int i = 0; i < cache.Count; i++)
         {
-            if (b != null) Destroy(b.gameObject);
+            bool active = i < needed;
+            cache[i].gameObject.SetActive(active);
+            if (active)
+            {
+                bind?.Invoke(i, cache[i]);
+            }
         }
-        spawnedOfferButtons.Clear();
     }
 
-    private static List<string> SkillsToNames(IReadOnlyList<SkillData> skills)
+    private string FormatSkillLine(SkillData s, string prefix)
     {
-        var list = new List<string>();
-        foreach (var s in skills) list.Add(s != null ? s.skillName : "(null)");
-        return list.Count == 0 ? new List<string> { "(none)" } : list;
-    }
+        if (s == null) return prefix + "(null)";
 
-    private static string FormatSkillLine(SkillData s)
-    {
-        if (s == null) return "(null)";
-        string tag = s.tag == SkillTag.None ? "" : $" [{s.tag}]";
-        return $"{s.skillName}  A:{s.attack} B:{s.block}{tag}";
+        // grade表示（導入済み想定）
+        string g = s.grade.ToString(); // 例: G3
+        string tag = s.tag != SkillTag.None ? $"[{s.tag}]" : "";
+        string type = s.type.ToString();
+
+        return $"{prefix}{s.skillName} ({g}) {tag}  A:{s.attack} B:{s.block}  <{type}>";
     }
 }

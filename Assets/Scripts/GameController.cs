@@ -9,7 +9,7 @@ public class GameController : MonoBehaviour
     [Header("UI")]
     [SerializeField] private GameUI ui;
 
-    // B: Library UI（旧UI版）
+    // いまは無くても動く（後で繋ぐ）
     [SerializeField] private MonsterLibraryUI libraryUI;
 
     [Header("Pools")]
@@ -20,42 +20,54 @@ public class GameController : MonoBehaviour
 
     [Header("Config")]
     [SerializeField] private int playerBaseHp = 40;
+    [SerializeField] private int startingCoins = 10;
+
+    private const int BuyCost = 3;
+    private const int SellGain = 1;
 
     private Monster player;
     private readonly Shop shop = new();
 
-    // ショップグレード（BG準拠で提示数増）
     private int shopGrade = 1;
+    private int coins;
+    private int shopTurn = 0; // ショップに来た回数（アップグレード割引用）
 
     private List<SkillData> currentOffers = new();
 
     // Skill辞書（Record -> Monster変換用）
     private Dictionary<string, SkillData> skillDict;
 
-    // 疑似PvP用の選択（LibraryUI側が持っているが、参照しやすくする）
+    // 疑似PvP用の選択
     private MonsterRecord selectedMy;
     private MonsterRecord selectedEnemy;
 
-    // 戦闘ログ用カウンタ（Recordに入れる想定）
+    // 戦闘ログ用
     private int totalBattles;
     private int totalTurns;
 
-    // Cooldown管理：前ターンに抽選された cooldown 技ID（次ターン除外）
-    private readonly HashSet<string> cooldownBlockedNextTurn = new();
+    // upgrade base costs: index = nextGrade
+    private readonly int[] upgradeBaseCosts = new int[]
+    {
+        0,  // 0 unused
+        0,  // G1
+        10, // ->G2
+        12, // ->G3
+        15, // ->G4
+        18, // ->G5
+        22  // ->G6
+    };
 
     void Start()
     {
         player = new Monster(playerBaseHp);
+        coins = startingCoins;
 
-        // Skill辞書作成
         skillDict = BuildSkillDict(skillPool);
 
         // 次へボタン：バトル終了→ショップへ
         ui.BindNextButton(() => OpenShop());
 
-        // Library UIがある場合、最初は閉じておく（Panel側で非表示でもOK）
-        if (libraryUI != null)
-            libraryUI.Hide();
+        if (libraryUI != null) libraryUI.Hide();
 
         OpenShop();
     }
@@ -64,59 +76,94 @@ public class GameController : MonoBehaviour
 
     void OpenShop()
     {
-        int offerCount = 2 + shopGrade; // v1.3/v1.4: 2 + grade
-        currentOffers = shop.Offer(skillPool, offerCount);
+        shopTurn++;
+
+        int offerCount = 2 + shopGrade;
+        // もし SkillGradeフィルタ対応の Offer(pool,count,grade) を実装済みならそちらに差し替えてOK
+        currentOffers = shop.Offer(skillPool, offerCount, shopGrade);
+
+        int upgradeCost = GetUpgradeCost(shopGrade, shopTurn);
 
         ui.ShowShop(
-            shopGrade,
-            currentOffers,
-            player.skills,
-            onPickOffer: (idx) => TakeSkill(currentOffers[idx]),
-            onReroll: () =>
-            {
-                currentOffers = shop.Offer(skillPool, offerCount);
-                ui.ShowShop(
-                    shopGrade,
-                    currentOffers,
-                    player.skills,
-                    (i) => TakeSkill(currentOffers[i]),
-                    () => Reroll(offerCount),
-                    StartBattle
-                );
-            },
+            shopGrade: shopGrade,
+            coins: coins,
+            upgradeCost: upgradeCost,
+            buyCost: BuyCost,
+            sellGain: SellGain,
+            offers: currentOffers,
+            owned: player.skills,
+            onPickOffer: (idx) => TryBuySkillAt(idx),
+            onReroll: () => Reroll(offerCount),
+            onUpgrade: () => TryUpgradeShop(),
+            onSellOwned: (idx) => TrySellSkillAt(idx),
             onStartBattle: StartBattle
         );
     }
 
     void Reroll(int offerCount)
     {
-        currentOffers = shop.Offer(skillPool, offerCount);
-        ui.ShowShop(
-            shopGrade,
-            currentOffers,
-            player.skills,
-            (i) => TakeSkill(currentOffers[i]),
-            () => Reroll(offerCount),
-            StartBattle
-        );
+        // リロールコストを付けたい場合はここで coins 減らす
+        currentOffers = shop.Offer(skillPool, offerCount, shopGrade);
+        OpenShop(); // 表示更新（shopTurnを増やしたくないなら OpenShopを呼ばずにShowShopを直接呼ぶ運用にする）
     }
 
-    void TakeSkill(SkillData skill)
+    void TryBuySkillAt(int offerIndex)
     {
+        if (offerIndex < 0 || offerIndex >= currentOffers.Count) return;
+        var skill = currentOffers[offerIndex];
         if (skill == null) return;
+
+        if (coins < BuyCost) return;
+        coins -= BuyCost;
 
         if (player.skills.Count >= 7)
             player.skills.RemoveAt(0);
 
         player.skills.Add(skill);
 
-        // 取得後はショップ継続（プロトタイプ仕様）
+        // トリプルが実装済みならここで
+        TryTriple(player);
+
         OpenShop();
     }
 
-    // ===== Library (B) =====
+    void TrySellSkillAt(int index)
+    {
+        if (index < 0 || index >= player.skills.Count) return;
 
-    // Shop画面のボタン等から呼べるように public
+        player.skills.RemoveAt(index);
+        coins += SellGain;
+
+        OpenShop();
+    }
+
+    void TryUpgradeShop()
+    {
+        if (shopGrade >= 6) return;
+
+        int cost = GetUpgradeCost(shopGrade, shopTurn);
+        if (coins < cost) return;
+
+        coins -= cost;
+        shopGrade = Mathf.Min(6, shopGrade + 1);
+
+        OpenShop();
+    }
+
+    int GetUpgradeCost(int currentGrade, int shopTurn)
+    {
+        if (currentGrade >= 6) return 999999;
+
+        int baseCost = upgradeBaseCosts[currentGrade + 1];
+
+        int discounted = baseCost - shopTurn * 1;        // 1ターンごとに-1
+        int floor = Mathf.CeilToInt(baseCost * 0.5f);    // 下限50%
+
+        return Mathf.Max(discounted, floor);
+    }
+
+    // ===== Library (optional) =====
+
     public void OpenLibrary()
     {
         if (libraryUI == null)
@@ -124,11 +171,9 @@ public class GameController : MonoBehaviour
             Debug.LogWarning("libraryUI が未設定です。MonsterLibraryUI をアサインしてください。");
             return;
         }
-
         libraryUI.Show();
     }
 
-    // Libraryから戻るなどでショップへ戻す用（必要ならUIボタンに紐づけ）
     public void CloseLibraryAndBackToShop()
     {
         if (libraryUI != null) libraryUI.Hide();
@@ -139,7 +184,6 @@ public class GameController : MonoBehaviour
 
     void StartBattle()
     {
-        // Libraryで MY/ENEMY が両方選ばれていれば、それで疑似PvP
         PullSelectedRecordsFromLibrary();
 
         if (selectedMy != null && selectedEnemy != null)
@@ -148,13 +192,12 @@ public class GameController : MonoBehaviour
             return;
         }
 
-        // そうでなければ Training 戦（EnemyPreset）
         StartTrainingBattle();
     }
 
     void PullSelectedRecordsFromLibrary()
     {
-        if (libraryUI == null) return;
+        if (libraryUI == null) { selectedMy = null; selectedEnemy = null; return; }
 
         selectedMy = libraryUI.SelectedMy;
         selectedEnemy = libraryUI.SelectedEnemy;
@@ -162,14 +205,10 @@ public class GameController : MonoBehaviour
 
     void StartPseudoPvp(MonsterRecord my, MonsterRecord enemyRec)
     {
-        // MY側は「今の育成中プレイヤー」ではなく、Recordから生成（PvP検証用）
         var myMonster = Monster.CreateMonsterFromRecord(my, skillDict);
         var enemyMonster = Monster.CreateMonsterFromRecord(enemyRec, skillDict);
 
-        // UI表示
         ui.ShowBattleStart($"PVP: {GetDisplayName(enemyRec)}", myMonster.hp, enemyMonster.hp);
-
-        // 以降のループを Record戦向けに
         StartCoroutine(BattleLoop(myMonster, enemyMonster, isPvp: true, myRecord: my, enemyRecord: enemyRec));
     }
 
@@ -184,11 +223,10 @@ public class GameController : MonoBehaviour
         var preset = enemyPresets[Random.Range(0, enemyPresets.Count)];
         var enemy = Monster.FromPreset(preset);
 
-        // プレイヤーHPリセット（毎戦）
+        // 毎戦リセット
         player.hp = player.maxHp;
 
         ui.ShowBattleStart(preset.enemyName, player.hp, enemy.hp);
-
         StartCoroutine(BattleLoop(player, enemy, isPvp: false, myRecord: null, enemyRecord: null));
     }
 
@@ -199,8 +237,6 @@ public class GameController : MonoBehaviour
         totalBattles++;
         int turn = 0;
 
-        // Cooldown除外の管理は「各陣営ごと」に持つのが理想だが、
-        // プロトタイプでは 2つ持つ（プレイヤー側/敵側）
         var myCooldownBlocked = new HashSet<string>();
         var enemyCooldownBlocked = new HashSet<string>();
 
@@ -222,9 +258,9 @@ public class GameController : MonoBehaviour
                 e.pickedNames,
                 e.atk,
                 e.def,
-                p.fatigue,     // 同ターン同値なので片側でOK
-                p.damage,      // MY→ENEMY
-                e.damage       // ENEMY→MY
+                p.fatigue,
+                p.damage,
+                e.damage
             );
 
             yield return new WaitForSeconds(0.35f);
@@ -235,10 +271,10 @@ public class GameController : MonoBehaviour
 
         if (!isPvp)
         {
-            // Training: 勝ったらgrade上げる（上限6）
-            if (win) shopGrade = Mathf.Min(6, shopGrade + 1);
+            // 勝利時にコイン報酬（おすすめ：最低限の経済循環）
+            if (win) coins += 3;
 
-            // Training勝利時：Record保存（まずは勝利時のみでOK）
+            // 勝利時保存（Repositoryがあれば）
             if (win)
             {
                 var record = MonsterRecordFactory.CreateRecordFromMonster(
@@ -248,20 +284,12 @@ public class GameController : MonoBehaviour
                     totalTurns: totalTurns
                 );
 
-                // Repositoryがある前提（Bで作成）
                 if (MonsterRecordRepository.I != null)
-                {
                     MonsterRecordRepository.I.Add(record);
-                }
-                else
-                {
-                    Debug.LogWarning("MonsterRecordRepository が見つかりません。Sceneに追加してください。");
-                }
             }
         }
         else
         {
-            // 疑似PvP戦績更新（MY/ENEMYどちらを増やすかは好み）
             if (myRecord != null)
             {
                 if (win) myRecord.pvpWin++;
@@ -277,7 +305,6 @@ public class GameController : MonoBehaviour
 
     // ===== Turn Resolution =====
 
-    // cooldownBlockedNextTurn：前ターンで抽選されたCooldown技（次ターン抽選対象外）
     private (string pickedNames, int atk, int def, int fatigue, int damage) ResolveTurn(
         Monster atkM,
         Monster defM,
@@ -288,28 +315,28 @@ public class GameController : MonoBehaviour
         int n = atkM.skills.Count;
         int k = Mathf.CeilToInt(n / 2f);
 
-        // 1) 候補プール：所持技から Cooldown除外を取り除く
         var pool = new List<SkillData>();
         foreach (var s in atkM.skills)
         {
             if (s == null) continue;
 
-            // Cooldown(1)：前ターンで抽選されたら、次ターンは候補外
-            if (s.tag == SkillTag.Cooldown && !string.IsNullOrEmpty(s.skillId) && cooldownBlockedNextTurn.Contains(s.skillId))
+            if (s.tag == SkillTag.Cooldown &&
+                !string.IsNullOrEmpty(s.skillId) &&
+                cooldownBlockedNextTurn.Contains(s.skillId))
                 continue;
 
             pool.Add(s);
         }
 
-        // 2) Stable優先
         var picked = new List<SkillData>();
+
+        // Stable優先
         foreach (var s in pool)
         {
             if (s.tag == SkillTag.Stable && picked.Count < k)
                 picked.Add(s);
         }
 
-        // 3) 残りをランダム
         var rest = pool.Except(picked).ToList();
         while (picked.Count < k && rest.Count > 0)
         {
@@ -318,10 +345,8 @@ public class GameController : MonoBehaviour
             rest.RemoveAt(idx);
         }
 
-        // 4) 集計
         int atk = 0;
         int def = 0;
-
         foreach (var s in picked)
         {
             atk += s.attack;
@@ -333,7 +358,6 @@ public class GameController : MonoBehaviour
 
         defM.hp -= damage;
 
-        // 5) 次ターン除外を更新：このターン引いたCooldown技を「次ターンブロック」にする
         cooldownBlockedNextTurn.Clear();
         foreach (var s in picked)
         {
@@ -341,8 +365,16 @@ public class GameController : MonoBehaviour
                 cooldownBlockedNextTurn.Add(s.skillId);
         }
 
-        string pickedNames = string.Join(", ", picked.Select(x => x.skillName));
+        string pickedNames = string.Join(", ", picked.Where(x => x != null).Select(x => x.skillName));
         return (pickedNames, atk, def, fatigue, damage);
+    }
+
+    // ===== Triple (optional) =====
+    // 既に実装済みなら、このメソッドを削除してあなたの版に置き換えてOK
+    private void TryTriple(Monster m)
+    {
+        // 未実装でも動くように“何もしない”が安全
+        // トリプル導入済みなら、ここにあなたのTryTripleを貼ってください
     }
 
     // ===== Helpers =====
@@ -357,7 +389,6 @@ public class GameController : MonoBehaviour
 
             if (string.IsNullOrEmpty(s.skillId))
             {
-                // プロトタイプでは警告だけ出す（後で必須化）
                 Debug.LogWarning($"SkillData '{s.name}' の skillId が空です。Record保存/PvPで困ります。");
                 continue;
             }
