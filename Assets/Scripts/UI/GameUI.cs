@@ -15,7 +15,7 @@ public class GameUI : MonoBehaviour
 
     // ===== Shop =====
     [Header("Shop - Header")]
-    [SerializeField] private Text shopHeaderText; // grade/coins/upgradeCostなど
+    [SerializeField] private Text shopHeaderText;
 
     [Header("Shop - Offer List")]
     [SerializeField] private Transform offerRoot;
@@ -28,22 +28,23 @@ public class GameUI : MonoBehaviour
     [Header("Shop - Buttons")]
     [SerializeField] private Button rerollButton;
     [SerializeField] private Button upgradeButton;
-    [SerializeField] private Button startBattleButton;
+    [SerializeField] private Button freezeButton;
+    [SerializeField] private Button endTurnButton;
 
     // ===== Battle =====
     [Header("Battle - Header")]
-    [SerializeField] private Text battleHeaderText; // enemyName, turn etc
-    [SerializeField] private Text hpText;           // P/E HP
-    [SerializeField] private Text pickedText;       // picked skills names
-    [SerializeField] private Text statText;         // atk/def/fatigue/damage
-    [SerializeField] private Text logText;          // accumulated log (optional)
+    [SerializeField] private Text battleHeaderText;
+    [SerializeField] private Text hpText;
+    [SerializeField] private Text pickedText;
+    [SerializeField] private Text statText;
+    [SerializeField] private Text logText;
 
     private readonly List<Button> offerButtons = new();
     private readonly List<Button> ownedButtons = new();
 
     private Action onNext;
 
-    // -------------- Public API --------------
+    // ---------------- Public API ----------------
 
     public void BindNextButton(Action onClick)
     {
@@ -56,94 +57,125 @@ public class GameUI : MonoBehaviour
     }
 
     /// <summary>
-    /// Shop画面表示（コイン/アップグレード込み）
+    /// BG風 酒場（全体Freeze / 購入しても補充しない / 補充はリロールのみ）
     /// </summary>
-    public void ShowShop(
-        int shopGrade,
+    public void ShowShop_BG_AllFreeze(
+        int turn,
+        int tier,
         int coins,
-        int upgradeCost,
+        bool shopFrozen,
+        int rerollCost,
         int buyCost,
         int sellGain,
+        int upgradeCost,
         IReadOnlyList<SkillData> offers,
         IReadOnlyList<SkillData> owned,
-        Action<int> onPickOffer,
+        Action<int> onBuyOffer,
         Action onReroll,
         Action onUpgrade,
         Action<int> onSellOwned,
-        Action onStartBattle
+        Action onToggleFreezeAll,
+        Action onEndTurn
     )
     {
         SetPanel(shop: true);
 
-        // Header
         if (shopHeaderText != null)
         {
             shopHeaderText.text =
-                $"SHOP GRADE: {shopGrade}\n" +
+                $"TURN: {turn}\n" +
+                $"TIER: {tier}\n" +
                 $"COINS: {coins}\n" +
-                $"UPGRADE COST: {(shopGrade >= 6 ? "-" : upgradeCost)}\n" +
-                $"BUY: -{buyCost}  SELL: +{sellGain}";
+                $"UPGRADE: {(tier >= 6 ? "-" : upgradeCost)}\n" +
+                $"REROLL: -{rerollCost}  BUY:-{buyCost}  SELL:+{sellGain}\n" +
+                $"FREEZE: {(shopFrozen ? "ON" : "OFF")}";
         }
 
-        // Offer list
+        // Offer buttons（クリック=BUY）
         RebuildButtons(
             offerRoot,
             offerButtonPrefab,
             offerButtons,
-            offers.Count,
+            offers?.Count ?? 0,
             (i, btn) =>
             {
                 var s = offers[i];
-                btn.GetComponentInChildren<Text>().text = FormatSkillLine(s, prefix: $"BUY(-{buyCost}) ");
+                string label = FormatSkillLine(s, prefix: $"BUY(-{buyCost}) ");
+                if (shopFrozen) label = "[F] " + label;
+
+                var t = btn.GetComponentInChildren<Text>();
+                if (t != null) t.text = label;
+
                 btn.onClick.RemoveAllListeners();
-                btn.onClick.AddListener(() => onPickOffer?.Invoke(i));
-                btn.interactable = (s != null); // coins条件はController側で弾く想定
+                btn.onClick.AddListener(() => onBuyOffer?.Invoke(i));
+
+                // 空枠 or コイン不足は買えない
+                btn.interactable = (s != null) && coins >= buyCost;
             }
         );
 
-        // Owned list (Sell)
+        // Owned buttons（クリック=SELL）
         RebuildButtons(
             ownedRoot,
             ownedButtonPrefab,
             ownedButtons,
-            owned.Count,
+            owned?.Count ?? 0,
             (i, btn) =>
             {
                 var s = owned[i];
-                btn.GetComponentInChildren<Text>().text = FormatSkillLine(s, prefix: $"SELL(+{sellGain}) ");
+                var t = btn.GetComponentInChildren<Text>();
+                if (t != null) t.text = FormatSkillLine(s, prefix: $"SELL(+{sellGain}) ");
+
                 btn.onClick.RemoveAllListeners();
                 btn.onClick.AddListener(() => onSellOwned?.Invoke(i));
                 btn.interactable = (s != null);
             }
         );
 
-        // Buttons
+        // Reroll
         if (rerollButton != null)
         {
             rerollButton.onClick.RemoveAllListeners();
             rerollButton.onClick.AddListener(() => onReroll?.Invoke());
+
+            // Freeze中はリロール無効（あなたの仕様）
+            rerollButton.interactable = !shopFrozen && coins >= rerollCost;
+            SetButtonLabel(rerollButton, $"REROLL (-{rerollCost})");
         }
 
+        // Upgrade
         if (upgradeButton != null)
         {
             upgradeButton.onClick.RemoveAllListeners();
             upgradeButton.onClick.AddListener(() => onUpgrade?.Invoke());
-            upgradeButton.interactable = shopGrade < 6; // coins条件はController側で弾く想定
+
+            bool canUpgrade = tier < 6 && coins >= upgradeCost;
+            upgradeButton.interactable = canUpgrade;
+            SetButtonLabel(upgradeButton, tier >= 6 ? "UPGRADE (-)" : $"UPGRADE (-{upgradeCost})");
         }
 
-        if (startBattleButton != null)
+        // Freeze (ALL)
+        if (freezeButton != null)
         {
-            startBattleButton.onClick.RemoveAllListeners();
-            startBattleButton.onClick.AddListener(() => onStartBattle?.Invoke());
+            freezeButton.onClick.RemoveAllListeners();
+            freezeButton.onClick.AddListener(() => onToggleFreezeAll?.Invoke());
+            freezeButton.interactable = true;
+            SetButtonLabel(freezeButton, shopFrozen ? "UNFREEZE" : "FREEZE");
         }
 
-        // Nextボタンはショップでは基本不要（必要なら表示切替）
+        // End Turn
+        if (endTurnButton != null)
+        {
+            endTurnButton.onClick.RemoveAllListeners();
+            endTurnButton.onClick.AddListener(() => onEndTurn?.Invoke());
+            endTurnButton.interactable = true;
+            SetButtonLabel(endTurnButton, "END TURN");
+        }
+
+        // Nextはショップでは基本非表示
         if (nextButton != null) nextButton.gameObject.SetActive(false);
     }
 
-    /// <summary>
-    /// バトル開始表示
-    /// </summary>
     public void ShowBattleStart(string enemyName, int playerHp, int enemyHp)
     {
         SetPanel(shop: false);
@@ -158,9 +190,6 @@ public class GameUI : MonoBehaviour
         if (nextButton != null) nextButton.gameObject.SetActive(false);
     }
 
-    /// <summary>
-    /// 毎ターン更新
-    /// </summary>
     public void UpdateBattleTurn(
         int turn,
         int playerHp,
@@ -202,22 +231,20 @@ public class GameUI : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 終了表示（Nextボタンでショップへ戻す想定）
-    /// </summary>
     public void ShowBattleEnd(bool win)
     {
         if (battleHeaderText != null)
             battleHeaderText.text = win ? "WIN!" : "LOSE...";
 
+        // Next押下でGameControllerが次ターンへ
         if (nextButton != null)
         {
             nextButton.gameObject.SetActive(true);
-            // BindNextButtonで設定済みの onNext が呼ばれる
+            SetButtonLabel(nextButton, "NEXT");
         }
     }
 
-    // -------------- Helpers --------------
+    // ---------------- Helpers ----------------
 
     private void SetPanel(bool shop)
     {
@@ -235,18 +262,17 @@ public class GameUI : MonoBehaviour
     {
         if (root == null || prefab == null) return;
 
-        // 足りない分生成
         while (cache.Count < needed)
         {
             var btn = Instantiate(prefab, root);
             cache.Add(btn);
         }
 
-        // 余りは非表示
         for (int i = 0; i < cache.Count; i++)
         {
             bool active = i < needed;
             cache[i].gameObject.SetActive(active);
+
             if (active)
             {
                 bind?.Invoke(i, cache[i]);
@@ -256,13 +282,19 @@ public class GameUI : MonoBehaviour
 
     private string FormatSkillLine(SkillData s, string prefix)
     {
-        if (s == null) return prefix + "(null)";
+        if (s == null) return prefix + "(EMPTY)";
 
-        // grade表示（導入済み想定）
-        string g = s.grade.ToString(); // 例: G3
-        string tag = s.tag != SkillTag.None ? $"[{s.tag}]" : "";
+        string g = ((int)s.grade).ToString();
+        string tag = (s.tag != SkillTag.None) ? $"[{s.tag}]" : "";
         string type = s.type.ToString();
 
-        return $"{prefix}{s.skillName} ({g}) {tag}  A:{s.attack} B:{s.block}  <{type}>";
+        return $"{prefix}{s.skillName} (G{g}) {tag}  A:{s.attack} B:{s.block}  <{type}>";
+    }
+
+    private void SetButtonLabel(Button btn, string label)
+    {
+        if (btn == null) return;
+        var t = btn.GetComponentInChildren<Text>();
+        if (t != null) t.text = label;
     }
 }

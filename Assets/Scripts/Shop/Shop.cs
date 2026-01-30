@@ -4,74 +4,62 @@ using UnityEngine;
 
 public class Shop
 {
-    /// <summary>
-    /// ショップグレードに応じて、入手可能スキル（grade<=shopGrade & shopOnlyBase）から提示する
-    /// </summary>
-    public List<SkillData> Offer(List<SkillData> pool, int count, int shopGrade)
+    private SkillData PickOne(List<SkillData> pool, int tier, HashSet<SkillData> avoidOrNull = null)
     {
-        if (pool == null || pool.Count == 0) return new List<SkillData>();
+        if (pool == null || pool.Count == 0) return null;
 
-        // 1) 候補：ショップに出るベーススキルのみ + grade制限
         var candidates = pool
             .Where(s => s != null
                 && s.shopOnlyBase
-                && (int)s.grade <= shopGrade)
+                && (int)s.grade <= tier)
             .ToList();
 
-        if (candidates.Count == 0) return new List<SkillData>();
+        if (avoidOrNull != null)
+            candidates = candidates.Where(s => !avoidOrNull.Contains(s)).ToList();
 
-        // 2) 重複を避けたいので picked で管理（候補が少ない場合は途中で止まる）
-        var result = new List<SkillData>();
-        var picked = new HashSet<SkillData>();
+        if (candidates.Count == 0) return null;
 
-        for (int i = 0; i < count; i++)
-        {
-            var s = WeightedPick(candidates, shopGrade, picked);
-            if (s == null)
-            {
-                // 候補が尽きたら、残りは重複許可で埋める（詰み防止）
-                s = WeightedPick(candidates, shopGrade, null);
-                if (s == null) break;
-            }
-
-            result.Add(s);
-            picked.Add(s);
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// shopGradeに近いほどレアにする重み付き抽選
-    /// diff=shopGrade-skillGrade: 0(同グレード)が一番レア
-    /// weight = 1 + diff*2 （例：diff0=1, diff1=3, diff2=5…）
-    /// </summary>
-    private SkillData WeightedPick(List<SkillData> candidates, int shopGrade, HashSet<SkillData> pickedOrNull)
-    {
-        var list = (pickedOrNull == null)
-            ? candidates
-            : candidates.Where(c => !pickedOrNull.Contains(c)).ToList();
-
-        if (list.Count == 0) return null;
-
+        // tierに近いほどレア：diff=0 が最レア
         int total = 0;
-        var weights = new int[list.Count];
+        var weights = new int[candidates.Count];
 
-        for (int i = 0; i < list.Count; i++)
+        for (int i = 0; i < candidates.Count; i++)
         {
-            int diff = shopGrade - (int)list[i].grade; // 0..(shopGrade-1)
-            int w = 1 + diff * 2;
+            int diff = tier - (int)candidates[i].grade; // 0..(tier-1)
+            int w = 1 + diff * 2;                       // 0:1, 1:3, 2:5...
             weights[i] = w;
             total += w;
         }
 
         int r = Random.Range(0, total);
-        for (int i = 0; i < list.Count; i++)
+        for (int i = 0; i < candidates.Count; i++)
         {
             r -= weights[i];
-            if (r < 0) return list[i];
+            if (r < 0) return candidates[i];
         }
 
-        return list[0];
+        return candidates[0];
+    }
+
+    /// <summary>
+    /// 店の更新（＝補充はここでのみ行う）
+    /// - isFrozen=true の場合は完全に何もしない（提示維持、空枠も埋めない）
+    /// - isFrozen=false の場合、全スロットを引き直す（空枠も埋まる）
+    /// </summary>
+    public void RefreshAll(List<SkillData> pool, int tier, List<SkillData> slots, bool isFrozen)
+    {
+        if (slots == null || slots.Count == 0) return;
+        if (isFrozen) return;
+
+        // 同一提示を減らす（候補が少ない場合は重複する）
+        var avoid = new HashSet<SkillData>();
+
+        for (int i = 0; i < slots.Count; i++)
+        {
+            var s = PickOne(pool, tier, avoid);
+            if (s == null) s = PickOne(pool, tier, null); // 詰み防止
+            slots[i] = s;
+            if (s != null) avoid.Add(s);
+        }
     }
 }

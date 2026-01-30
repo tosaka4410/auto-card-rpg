@@ -1,16 +1,12 @@
-// Assets/Scripts/GameController.cs
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
+using System.Linq;
 
 public class GameController : MonoBehaviour
 {
     [Header("UI")]
     [SerializeField] private GameUI ui;
-
-    // いまは無くても動く（後で繋ぐ）
-    [SerializeField] private MonsterLibraryUI libraryUI;
 
     [Header("Pools")]
     public List<SkillData> skillPool;
@@ -20,197 +16,171 @@ public class GameController : MonoBehaviour
 
     [Header("Config")]
     [SerializeField] private int playerBaseHp = 40;
-    [SerializeField] private int startingCoins = 10;
 
     private const int BuyCost = 3;
     private const int SellGain = 1;
+    private const int RerollCost = 1;
 
     private Monster player;
     private readonly Shop shop = new();
 
-    private int shopGrade = 1;
-    private int coins;
-    private int shopTurn = 0; // ショップに来た回数（アップグレード割引用）
+    // BG風：ターン制酒場
+    private int turn = 0;
+    private int coins = 0;
 
-    private List<SkillData> currentOffers = new();
+    // 酒場Tier
+    private int shopTier = 1;
 
-    // Skill辞書（Record -> Monster変換用）
-    private Dictionary<string, SkillData> skillDict;
+    // ★全体Freeze
+    private bool shopFrozen = false;
 
-    // 疑似PvP用の選択
-    private MonsterRecord selectedMy;
-    private MonsterRecord selectedEnemy;
+    // 提示スロット
+    private List<SkillData> offers = new();
 
-    // 戦闘ログ用
-    private int totalBattles;
-    private int totalTurns;
+    // Tierごとの提示数（あなたのゲーム用に調整OK）
+    private readonly int[] offerCountByTier = new int[] { 0, 3, 4, 4, 5, 5, 6 };
 
-    // upgrade base costs: index = nextGrade
-    private readonly int[] upgradeBaseCosts = new int[]
-    {
-        0,  // 0 unused
-        0,  // G1
-        10, // ->G2
-        12, // ->G3
-        15, // ->G4
-        18, // ->G5
-        22  // ->G6
-    };
+    // Tierアップコスト（BG代表値）
+    private readonly int[] tierUpCost = new int[] { 0, 0, 5, 7, 8, 9, 10 };
 
     void Start()
     {
         player = new Monster(playerBaseHp);
-        coins = startingCoins;
 
-        skillDict = BuildSkillDict(skillPool);
+        // バトル終了 → Next押下 → 次ターン開始
+        ui.BindNextButton(() => StartNextTurn());
 
-        // 次へボタン：バトル終了→ショップへ
-        ui.BindNextButton(() => OpenShop());
-
-        if (libraryUI != null) libraryUI.Hide();
-
-        OpenShop();
+        StartNextTurn();
     }
 
-    // ===== Shop =====
+    // ===== Turn Flow =====
 
-    void OpenShop()
+    void StartNextTurn()
     {
-        shopTurn++;
+        turn++;
 
-        int offerCount = 2 + shopGrade;
-        // もし SkillGradeフィルタ対応の Offer(pool,count,grade) を実装済みならそちらに差し替えてOK
-        currentOffers = shop.Offer(skillPool, offerCount, shopGrade);
+        // コイン支給：Turn1=3, Turn2=4 ... Turn8以降=10
+        coins = Mathf.Min(10, 2 + turn);
 
-        int upgradeCost = GetUpgradeCost(shopGrade, shopTurn);
+        // Tierに応じたスロット数
+        EnsureOfferSlots(offerCountByTier[shopTier]);
 
-        ui.ShowShop(
-            shopGrade: shopGrade,
+        // ターン開始の無料更新（Freeze中は更新しない）
+        shop.RefreshAll(skillPool, shopTier, offers, shopFrozen);
+
+        ShowShop();
+    }
+
+    void EnsureOfferSlots(int count)
+    {
+        while (offers.Count < count) offers.Add(null);
+        if (offers.Count > count) offers = offers.Take(count).ToList();
+    }
+
+    void ShowShop()
+    {
+        int upgradeCost = GetTierUpCost();
+
+        // ★ここはあなたの GameUI の関数名に合わせてください
+        // 例：ShowShop_BG_AllFreeze(...) を実装していない場合、既存のShowShopに寄せる必要があります
+        ui.ShowShop_BG_AllFreeze(
+            turn: turn,
+            tier: shopTier,
             coins: coins,
-            upgradeCost: upgradeCost,
+            shopFrozen: shopFrozen,
+            rerollCost: RerollCost,
             buyCost: BuyCost,
             sellGain: SellGain,
-            offers: currentOffers,
+            upgradeCost: upgradeCost,
+            offers: offers,
             owned: player.skills,
-            onPickOffer: (idx) => TryBuySkillAt(idx),
-            onReroll: () => Reroll(offerCount),
-            onUpgrade: () => TryUpgradeShop(),
-            onSellOwned: (idx) => TrySellSkillAt(idx),
-            onStartBattle: StartBattle
+            onBuyOffer: (i) => TryBuy(i),
+            onReroll: () => TryReroll(),
+            onUpgrade: () => TryUpgrade(),
+            onSellOwned: (i) => TrySell(i),
+            onToggleFreezeAll: () => ToggleShopFreeze(),
+            onEndTurn: () => EndTurn()
         );
     }
 
-    void Reroll(int offerCount)
+    void ToggleShopFreeze()
     {
-        // リロールコストを付けたい場合はここで coins 減らす
-        currentOffers = shop.Offer(skillPool, offerCount, shopGrade);
-        OpenShop(); // 表示更新（shopTurnを増やしたくないなら OpenShopを呼ばずにShowShopを直接呼ぶ運用にする）
+        shopFrozen = !shopFrozen;
+        ShowShop();
     }
 
-    void TryBuySkillAt(int offerIndex)
+    void TryReroll()
     {
-        if (offerIndex < 0 || offerIndex >= currentOffers.Count) return;
-        var skill = currentOffers[offerIndex];
-        if (skill == null) return;
+        // Freeze中は更新できない（あなたの仕様）
+        if (shopFrozen) return;
+
+        if (coins < RerollCost) return;
+        coins -= RerollCost;
+
+        shop.RefreshAll(skillPool, shopTier, offers, shopFrozen);
+        ShowShop();
+    }
+
+    void TryUpgrade()
+    {
+        if (shopTier >= 6) return;
+
+        int cost = GetTierUpCost();
+        if (coins < cost) return;
+
+        coins -= cost;
+        shopTier++;
+
+        EnsureOfferSlots(offerCountByTier[shopTier]);
+
+        // BGでは「上げた瞬間に店の内容は変わらない」扱いにしておく
+        ShowShop();
+    }
+
+    int GetTierUpCost()
+    {
+        if (shopTier >= 6) return 999999;
+        return tierUpCost[shopTier + 1];
+    }
+
+    void TryBuy(int offerIndex)
+    {
+        if (offerIndex < 0 || offerIndex >= offers.Count) return;
+
+        var s = offers[offerIndex];
+        if (s == null) return;
 
         if (coins < BuyCost) return;
         coins -= BuyCost;
 
-        if (player.skills.Count >= 7)
-            player.skills.RemoveAt(0);
+        if (player.skills.Count >= 7) player.skills.RemoveAt(0);
+        player.skills.Add(s);
 
-        player.skills.Add(skill);
-
-        // トリプルが実装済みならここで
+        // トリプルがあるならここで
         TryTriple(player);
 
-        OpenShop();
+        // ★重要：購入した枠は補充しない（あなたの仕様）
+        offers[offerIndex] = null;
+
+        ShowShop();
     }
 
-    void TrySellSkillAt(int index)
+    void TrySell(int ownedIndex)
     {
-        if (index < 0 || index >= player.skills.Count) return;
+        if (ownedIndex < 0 || ownedIndex >= player.skills.Count) return;
 
-        player.skills.RemoveAt(index);
+        player.skills.RemoveAt(ownedIndex);
         coins += SellGain;
 
-        OpenShop();
+        ShowShop();
     }
 
-    void TryUpgradeShop()
+    void EndTurn()
     {
-        if (shopGrade >= 6) return;
-
-        int cost = GetUpgradeCost(shopGrade, shopTurn);
-        if (coins < cost) return;
-
-        coins -= cost;
-        shopGrade = Mathf.Min(6, shopGrade + 1);
-
-        OpenShop();
-    }
-
-    int GetUpgradeCost(int currentGrade, int shopTurn)
-    {
-        if (currentGrade >= 6) return 999999;
-
-        int baseCost = upgradeBaseCosts[currentGrade + 1];
-
-        int discounted = baseCost - shopTurn * 1;        // 1ターンごとに-1
-        int floor = Mathf.CeilToInt(baseCost * 0.5f);    // 下限50%
-
-        return Mathf.Max(discounted, floor);
-    }
-
-    // ===== Library (optional) =====
-
-    public void OpenLibrary()
-    {
-        if (libraryUI == null)
-        {
-            Debug.LogWarning("libraryUI が未設定です。MonsterLibraryUI をアサインしてください。");
-            return;
-        }
-        libraryUI.Show();
-    }
-
-    public void CloseLibraryAndBackToShop()
-    {
-        if (libraryUI != null) libraryUI.Hide();
-        OpenShop();
-    }
-
-    // ===== Battle Entry =====
-
-    void StartBattle()
-    {
-        PullSelectedRecordsFromLibrary();
-
-        if (selectedMy != null && selectedEnemy != null)
-        {
-            StartPseudoPvp(selectedMy, selectedEnemy);
-            return;
-        }
-
         StartTrainingBattle();
     }
 
-    void PullSelectedRecordsFromLibrary()
-    {
-        if (libraryUI == null) { selectedMy = null; selectedEnemy = null; return; }
-
-        selectedMy = libraryUI.SelectedMy;
-        selectedEnemy = libraryUI.SelectedEnemy;
-    }
-
-    void StartPseudoPvp(MonsterRecord my, MonsterRecord enemyRec)
-    {
-        var myMonster = Monster.CreateMonsterFromRecord(my, skillDict);
-        var enemyMonster = Monster.CreateMonsterFromRecord(enemyRec, skillDict);
-
-        ui.ShowBattleStart($"PVP: {GetDisplayName(enemyRec)}", myMonster.hp, enemyMonster.hp);
-        StartCoroutine(BattleLoop(myMonster, enemyMonster, isPvp: true, myRecord: my, enemyRecord: enemyRec));
-    }
+    // ===== Battle =====
 
     void StartTrainingBattle()
     {
@@ -223,41 +193,32 @@ public class GameController : MonoBehaviour
         var preset = enemyPresets[Random.Range(0, enemyPresets.Count)];
         var enemy = Monster.FromPreset(preset);
 
-        // 毎戦リセット
         player.hp = player.maxHp;
 
         ui.ShowBattleStart(preset.enemyName, player.hp, enemy.hp);
-        StartCoroutine(BattleLoop(player, enemy, isPvp: false, myRecord: null, enemyRecord: null));
+        StartCoroutine(BattleLoop(player, enemy));
     }
 
-    // ===== Battle Loop =====
-
-    IEnumerator BattleLoop(Monster myMonster, Monster enemy, bool isPvp, MonsterRecord myRecord, MonsterRecord enemyRecord)
+    IEnumerator BattleLoop(Monster myMonster, Monster enemy)
     {
-        totalBattles++;
-        int turn = 0;
+        int t = 0;
 
         var myCooldownBlocked = new HashSet<string>();
         var enemyCooldownBlocked = new HashSet<string>();
 
         while (myMonster.hp > 0 && enemy.hp > 0)
         {
-            turn++;
-            totalTurns++;
+            t++;
 
-            var p = ResolveTurn(myMonster, enemy, turn, myCooldownBlocked);
-            var e = ResolveTurn(enemy, myMonster, turn, enemyCooldownBlocked);
+            var p = ResolveTurn(myMonster, enemy, t, myCooldownBlocked);
+            var e = ResolveTurn(enemy, myMonster, t, enemyCooldownBlocked);
 
             ui.UpdateBattleTurn(
-                turn,
+                t,
                 myMonster.hp,
                 enemy.hp,
-                p.pickedNames,
-                p.atk,
-                p.def,
-                e.pickedNames,
-                e.atk,
-                e.def,
+                p.pickedNames, p.atk, p.def,
+                e.pickedNames, e.atk, e.def,
                 p.fatigue,
                 p.damage,
                 e.damage
@@ -267,49 +228,14 @@ public class GameController : MonoBehaviour
         }
 
         bool win = myMonster.hp > 0;
-        ui.ShowBattleEnd(win);
-
-        if (!isPvp)
-        {
-            // 勝利時にコイン報酬（おすすめ：最低限の経済循環）
-            if (win) coins += 3;
-
-            // 勝利時保存（Repositoryがあれば）
-            if (win)
-            {
-                var record = MonsterRecordFactory.CreateRecordFromMonster(
-                    player,
-                    finalShopGrade: shopGrade,
-                    totalBattles: totalBattles,
-                    totalTurns: totalTurns
-                );
-
-                if (MonsterRecordRepository.I != null)
-                    MonsterRecordRepository.I.Add(record);
-            }
-        }
-        else
-        {
-            if (myRecord != null)
-            {
-                if (win) myRecord.pvpWin++;
-                else myRecord.pvpLose++;
-            }
-            if (enemyRecord != null)
-            {
-                if (win) enemyRecord.pvpLose++;
-                else enemyRecord.pvpWin++;
-            }
-        }
+        ui.ShowBattleEnd(win); // Nextボタンで StartNextTurn
     }
-
-    // ===== Turn Resolution =====
 
     private (string pickedNames, int atk, int def, int fatigue, int damage) ResolveTurn(
         Monster atkM,
         Monster defM,
-        int turn,
-        HashSet<string> cooldownBlockedNextTurn
+        int t,
+        HashSet<string> cdBlockedNextTurn
     )
     {
         int n = atkM.skills.Count;
@@ -320,9 +246,10 @@ public class GameController : MonoBehaviour
         {
             if (s == null) continue;
 
+            // Cooldown(1)：前ターンに引いたら次ターン除外
             if (s.tag == SkillTag.Cooldown &&
                 !string.IsNullOrEmpty(s.skillId) &&
-                cooldownBlockedNextTurn.Contains(s.skillId))
+                cdBlockedNextTurn.Contains(s.skillId))
                 continue;
 
             pool.Add(s);
@@ -337,6 +264,7 @@ public class GameController : MonoBehaviour
                 picked.Add(s);
         }
 
+        // 残りランダム
         var rest = pool.Except(picked).ToList();
         while (picked.Count < k && rest.Count > 0)
         {
@@ -345,63 +273,33 @@ public class GameController : MonoBehaviour
             rest.RemoveAt(idx);
         }
 
-        int atk = 0;
-        int def = 0;
+        int atk = 0, def = 0;
         foreach (var s in picked)
         {
             atk += s.attack;
             def += s.block;
         }
 
-        int fatigue = Mathf.Max(0, turn - 4);
+        int fatigue = Mathf.Max(0, t - 4);
         int damage = Mathf.Max(0, atk - def) + fatigue;
 
         defM.hp -= damage;
 
-        cooldownBlockedNextTurn.Clear();
+        // 次ターン除外更新
+        cdBlockedNextTurn.Clear();
         foreach (var s in picked)
         {
             if (s.tag == SkillTag.Cooldown && !string.IsNullOrEmpty(s.skillId))
-                cooldownBlockedNextTurn.Add(s.skillId);
+                cdBlockedNextTurn.Add(s.skillId);
         }
 
-        string pickedNames = string.Join(", ", picked.Where(x => x != null).Select(x => x.skillName));
-        return (pickedNames, atk, def, fatigue, damage);
+        return (string.Join(", ", picked.Select(x => x.skillName)), atk, def, fatigue, damage);
     }
 
     // ===== Triple (optional) =====
-    // 既に実装済みなら、このメソッドを削除してあなたの版に置き換えてOK
+    // 既にあなたのTryTriple実装があるなら差し替えてOK
     private void TryTriple(Monster m)
     {
-        // 未実装でも動くように“何もしない”が安全
-        // トリプル導入済みなら、ここにあなたのTryTripleを貼ってください
-    }
-
-    // ===== Helpers =====
-
-    private Dictionary<string, SkillData> BuildSkillDict(List<SkillData> allSkills)
-    {
-        var dict = new Dictionary<string, SkillData>();
-
-        foreach (var s in allSkills)
-        {
-            if (s == null) continue;
-
-            if (string.IsNullOrEmpty(s.skillId))
-            {
-                Debug.LogWarning($"SkillData '{s.name}' の skillId が空です。Record保存/PvPで困ります。");
-                continue;
-            }
-
-            dict[s.skillId] = s;
-        }
-
-        return dict;
-    }
-
-    private string GetDisplayName(MonsterRecord r)
-    {
-        if (r == null) return "(null)";
-        return string.IsNullOrEmpty(r.displayName) ? $"Monster-{r.recordId.Substring(0, 4)}" : r.displayName;
+        // 未実装でも動くように何もしない
     }
 }
