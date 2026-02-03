@@ -1,12 +1,13 @@
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
 using System.Linq;
+using UnityEngine;
 
 public class GameController : MonoBehaviour
 {
     [Header("UI")]
-    [SerializeField] private GameUI ui;
+    [SerializeField]
+    private GameUI ui;
 
     [Header("Pools")]
     public List<SkillData> skillPool;
@@ -15,7 +16,19 @@ public class GameController : MonoBehaviour
     public List<EnemyPreset> enemyPresets;
 
     [Header("Config")]
-    [SerializeField] private int playerBaseHp = 40;
+    [SerializeField]
+    private int playerBaseHp = 40;
+
+    // ===== Tier Upgrade Discount (per turn) =====
+    [Header("Tier Upgrade Discount")]
+    [SerializeField]
+    private int tierUpDiscountStartTurn = 1; // 何ターン目から割引開始するか
+
+    [SerializeField]
+    private int tierUpDiscountPerTurn = 1; // 1ターンごとに何コスト下がるか
+
+    [SerializeField]
+    private int tierUpMinCost = 0; // 下限（0 or 1推奨）
 
     private const int BuyCost = 3;
     private const int SellGain = 1;
@@ -27,6 +40,9 @@ public class GameController : MonoBehaviour
     // BG風：ターン制酒場
     private int turn = 0;
     private int coins = 0;
+
+    // 最後にアップグレードしたターン（割引リセット基準）
+    private int lastUpgradeTurn = 0;
 
     // 酒場Tier
     private int shopTier = 1;
@@ -73,8 +89,10 @@ public class GameController : MonoBehaviour
 
     void EnsureOfferSlots(int count)
     {
-        while (offers.Count < count) offers.Add(null);
-        if (offers.Count > count) offers = offers.Take(count).ToList();
+        while (offers.Count < count)
+            offers.Add(null);
+        if (offers.Count > count)
+            offers = offers.Take(count).ToList();
     }
 
     void ShowShop()
@@ -112,9 +130,11 @@ public class GameController : MonoBehaviour
     void TryReroll()
     {
         // Freeze中は更新できない（あなたの仕様）
-        if (shopFrozen) return;
+        if (shopFrozen)
+            return;
 
-        if (coins < RerollCost) return;
+        if (coins < RerollCost)
+            return;
         coins -= RerollCost;
 
         shop.RefreshAll(skillPool, shopTier, offers, shopFrozen);
@@ -123,13 +143,18 @@ public class GameController : MonoBehaviour
 
     void TryUpgrade()
     {
-        if (shopTier >= 6) return;
+        if (shopTier >= 6)
+            return;
 
         int cost = GetTierUpCost();
-        if (coins < cost) return;
+        if (coins < cost)
+            return;
 
         coins -= cost;
         shopTier++;
+
+        // ★割引リセット：このターンを基準にする
+        lastUpgradeTurn = turn;
 
         EnsureOfferSlots(offerCountByTier[shopTier]);
 
@@ -139,21 +164,38 @@ public class GameController : MonoBehaviour
 
     int GetTierUpCost()
     {
-        if (shopTier >= 6) return 999999;
-        return tierUpCost[shopTier + 1];
+        if (shopTier >= 6)
+            return 999999;
+
+        int baseCost = tierUpCost[shopTier + 1];
+
+        // 「最後のアップグレード」以降の経過ターンで割引が増える
+        // 例：アップグレード直後の同ターンは0、次ターンから1…
+        int turnsSinceUpgrade = Mathf.Max(0, turn - lastUpgradeTurn);
+
+        int discount = turnsSinceUpgrade * tierUpDiscountPerTurn;
+
+        int finalCost = baseCost - discount;
+        finalCost = Mathf.Max(tierUpMinCost, finalCost);
+
+        return finalCost;
     }
 
     void TryBuy(int offerIndex)
     {
-        if (offerIndex < 0 || offerIndex >= offers.Count) return;
+        if (offerIndex < 0 || offerIndex >= offers.Count)
+            return;
 
         var s = offers[offerIndex];
-        if (s == null) return;
+        if (s == null)
+            return;
 
-        if (coins < BuyCost) return;
+        if (coins < BuyCost)
+            return;
         coins -= BuyCost;
 
-        if (player.skills.Count >= 7) player.skills.RemoveAt(0);
+        if (player.skills.Count >= 7)
+            player.skills.RemoveAt(0);
         player.skills.Add(s);
 
         // トリプルがあるならここで
@@ -167,7 +209,8 @@ public class GameController : MonoBehaviour
 
     void TrySell(int ownedIndex)
     {
-        if (ownedIndex < 0 || ownedIndex >= player.skills.Count) return;
+        if (ownedIndex < 0 || ownedIndex >= player.skills.Count)
+            return;
 
         player.skills.RemoveAt(ownedIndex);
         coins += SellGain;
@@ -217,8 +260,12 @@ public class GameController : MonoBehaviour
                 t,
                 myMonster.hp,
                 enemy.hp,
-                p.pickedNames, p.atk, p.def,
-                e.pickedNames, e.atk, e.def,
+                p.pickedNames,
+                p.atk,
+                p.def,
+                e.pickedNames,
+                e.atk,
+                e.def,
                 p.fatigue,
                 p.damage,
                 e.damage
@@ -244,12 +291,15 @@ public class GameController : MonoBehaviour
         var pool = new List<SkillData>();
         foreach (var s in atkM.skills)
         {
-            if (s == null) continue;
+            if (s == null)
+                continue;
 
             // Cooldown(1)：前ターンに引いたら次ターン除外
-            if (s.tag == SkillTag.Cooldown &&
-                !string.IsNullOrEmpty(s.skillId) &&
-                cdBlockedNextTurn.Contains(s.skillId))
+            if (
+                s.tag == SkillTag.Cooldown
+                && !string.IsNullOrEmpty(s.skillId)
+                && cdBlockedNextTurn.Contains(s.skillId)
+            )
                 continue;
 
             pool.Add(s);
@@ -273,7 +323,8 @@ public class GameController : MonoBehaviour
             rest.RemoveAt(idx);
         }
 
-        int atk = 0, def = 0;
+        int atk = 0,
+            def = 0;
         foreach (var s in picked)
         {
             atk += s.attack;

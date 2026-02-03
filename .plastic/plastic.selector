@@ -1,0 +1,3 @@
+repository "auto-card-rpg/auto-card-rpg@15668117609098@cloud"
+  path "/"
+    smartbranch "/main"
