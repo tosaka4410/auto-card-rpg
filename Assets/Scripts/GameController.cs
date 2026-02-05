@@ -36,6 +36,8 @@ public class GameController : MonoBehaviour
 
     private Monster player;
     private readonly Shop shop = new();
+    private Dictionary<string, SkillData> skillDict;
+
 
     // BG風：ターン制酒場
     private int turn = 0;
@@ -57,11 +59,16 @@ public class GameController : MonoBehaviour
     private readonly int[] offerCountByTier = new int[] { 0, 3, 4, 4, 5, 5, 6 };
 
     // Tierアップコスト（BG代表値）
-    private readonly int[] tierUpCost = new int[] { 0, 0, 5, 7, 8, 9, 10 };
+    private readonly int[] tierUpCost = new int[] { 0, 0, 6, 7, 8, 10, 11 };
 
     void Start()
     {
         player = new Monster(playerBaseHp);
+        skillDict = skillPool
+    .Where(s => s != null && !string.IsNullOrEmpty(s.skillId))
+    .GroupBy(s => s.skillId)
+    .ToDictionary(g => g.Key, g => g.First());
+
 
         // バトル終了 → Next押下 → 次ターン開始
         ui.BindNextButton(() => StartNextTurn());
@@ -347,10 +354,96 @@ public class GameController : MonoBehaviour
         return (string.Join(", ", picked.Select(x => x.skillName)), atk, def, fatigue, damage);
     }
 
-    // ===== Triple (optional) =====
-    // 既にあなたのTryTriple実装があるなら差し替えてOK
-    private void TryTriple(Monster m)
+// ===== Triple =====
+// 同一(baseId + tier)が3枚 → tier+1 を1枚生成して置き換える（連鎖あり）
+private void TryTriple(Monster m)
+{
+    if (m == null || m.skills == null || m.skills.Count == 0) return;
+
+    // 連鎖するので while で回す
+    while (true)
     {
-        // 未実装でも動くように何もしない
+        // key = $"{baseId}|{tier}"
+        var buckets = new Dictionary<string, List<int>>();
+
+        for (int i = 0; i < m.skills.Count; i++)
+        {
+            var s = m.skills[i];
+            if (s == null || string.IsNullOrEmpty(s.skillId)) continue;
+
+            GetBaseAndTier(s.skillId, out var baseId, out var tier);
+
+            string key = $"{baseId}|{tier}";
+            if (!buckets.TryGetValue(key, out var list))
+            {
+                list = new List<int>();
+                buckets[key] = list;
+            }
+            list.Add(i);
+        }
+
+        // どれか1つでも3枚以上あるか？
+        string foundKey = null;
+        List<int> idxs = null;
+
+        foreach (var kv in buckets)
+        {
+            if (kv.Value.Count >= 3)
+            {
+                foundKey = kv.Key;
+                idxs = kv.Value;
+                break;
+            }
+        }
+
+        if (foundKey == null) break; // もうトリプルなし
+
+        // foundKey を分解
+        var parts = foundKey.Split('|');
+        string baseIdFound = parts[0];
+        int tierFound = int.Parse(parts[1]);
+
+        int nextTier = tierFound + 1;
+        string evolvedId = $"{baseIdFound}_t{nextTier}";
+
+        // ベース参照（進化生成は baseSkill が必要）
+        if (skillDict == null || !skillDict.TryGetValue(baseIdFound, out var baseSkill) || baseSkill == null)
+        {
+            Debug.LogWarning($"TryTriple: base skill not found: {baseIdFound}");
+            break;
+        }
+
+        // 進化スキル生成
+        var evolved = SkillRuntimeFactory.CreateEvolvedFromBase(baseSkill, evolvedId, nextTier);
+
+        // 3枚消す（インデックスがズレないように降順）
+        idxs.Sort();
+        int a = idxs[0];
+        int b = idxs[1];
+        int c = idxs[2];
+
+        m.skills.RemoveAt(c);
+        m.skills.RemoveAt(b);
+        m.skills.RemoveAt(a);
+
+        // 進化を追加（位置は末尾でOK。位置を維持したいなら a に Insert してもよい）
+        m.skills.Add(evolved);
+
+        // ここで次の while 周回で連鎖チェック
     }
+}
+
+// skillId から baseId/tier を取り出す（ベースは tier=1 扱い）
+private static void GetBaseAndTier(string skillId, out string baseId, out int tier)
+{
+    baseId = skillId;
+    tier = 1;
+
+    if (SkillRuntimeFactory.TryParseEvolvedId(skillId, out var b, out var t))
+    {
+        baseId = b;
+        tier = Mathf.Max(1, t);
+    }
+}
+
 }
