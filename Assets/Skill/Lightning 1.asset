@@ -12,7 +12,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6593e2fbcd179dd4da437e9e4a18761c, type: 3}
   m_Name: Lightning 1
   m_EditorClassIdentifier: Assembly-CSharp::SkillData
+  skillId: lightning_1
   skillName: Lightning1
-  type: 1
   attack: 2
   block: 2
+  type: 1
+  tag: 0
+  grade: 1
+  shopOnlyBase: 1
+  evolveTier: 1
+  effectType: 0
+  effectValue: 1

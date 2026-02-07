@@ -100,11 +100,9 @@ public class GameUI : MonoBehaviour
             (i, btn) =>
             {
                 var s = new SkillInstance(offers[i]);
-                string label = FormatSkillLine(s, prefix: $"BUY(-{buyCost}) ");
-                if (shopFrozen) label = "[F] " + label;
 
-                var t = btn.GetComponentInChildren<Text>();
-                if (t != null) t.text = label;
+                var view = btn.GetComponent<CardView>();
+                if(view != null) view.Bind(s);
 
                 btn.onClick.RemoveAllListeners();
                 btn.onClick.AddListener(() => onBuyOffer?.Invoke(i));
@@ -123,8 +121,10 @@ public class GameUI : MonoBehaviour
             (i, btn) =>
             {
                 var s = owned[i];
-                var t = btn.GetComponentInChildren<Text>();
-                if (t != null) t.text = FormatSkillLine(s, prefix: $"SELL(+{sellGain}) ");
+
+                var view = btn.GetComponent<CardView>();
+                if(view != null) view.Bind(s);
+
 
                 btn.onClick.RemoveAllListeners();
                 btn.onClick.AddListener(() => onSellOwned?.Invoke(i));

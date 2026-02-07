@@ -12,9 +12,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6593e2fbcd179dd4da437e9e4a18761c, type: 3}
   m_Name: Guard 3
   m_EditorClassIdentifier: Assembly-CSharp::SkillData
-  skillId: 
+  skillId: guard_3
   skillName: Guard3
   attack: 2
   block: 8
   type: 2
   tag: 0
+  grade: 3
+  shopOnlyBase: 1
+  evolveTier: 1
+  effectType: 0
+  effectValue: 1

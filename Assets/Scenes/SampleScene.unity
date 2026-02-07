@@ -488,7 +488,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &211879713
 RectTransform:
   m_ObjectHideFlags: 0
@@ -866,8 +866,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 334905769}
-  - component: {fileID: 334905770}
   - component: {fileID: 334905771}
+  - component: {fileID: 334905772}
   m_Layer: 5
   m_Name: OfferRoot
   m_TagString: Untagged
@@ -891,35 +891,9 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -148.86304, y: 2}
-  m_SizeDelta: {x: 262.2739, y: 250}
+  m_AnchoredPosition: {x: 0, y: 63.5}
+  m_SizeDelta: {x: 560, y: 127}
   m_Pivot: {x: 0.5, y: 0.5}
---- !u!114 &334905770
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 334905768}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 59f8146938fff824cb5fd77236b75775, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.VerticalLayoutGroup
-  m_Padding:
-    m_Left: 0
-    m_Right: 0
-    m_Top: 0
-    m_Bottom: 0
-  m_ChildAlignment: 1
-  m_Spacing: 0
-  m_ChildForceExpandWidth: 1
-  m_ChildForceExpandHeight: 1
-  m_ChildControlWidth: 0
-  m_ChildControlHeight: 0
-  m_ChildScaleWidth: 0
-  m_ChildScaleHeight: 0
-  m_ReverseArrangement: 0
 --- !u!114 &334905771
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -934,6 +908,32 @@ MonoBehaviour:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.ContentSizeFitter
   m_HorizontalFit: 0
   m_VerticalFit: 0
+--- !u!114 &334905772
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 334905768}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 30649d3a9faa99c48a7b1166b86bf2a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.HorizontalLayoutGroup
+  m_Padding:
+    m_Left: 0
+    m_Right: 0
+    m_Top: 0
+    m_Bottom: 0
+  m_ChildAlignment: 0
+  m_Spacing: 0
+  m_ChildForceExpandWidth: 1
+  m_ChildForceExpandHeight: 1
+  m_ChildControlWidth: 0
+  m_ChildControlHeight: 0
+  m_ChildScaleWidth: 0
+  m_ChildScaleHeight: 0
+  m_ReverseArrangement: 0
 --- !u!1 &335084865
 GameObject:
   m_ObjectHideFlags: 0
@@ -1921,7 +1921,7 @@ MonoBehaviour:
   nextButton: {fileID: 406505169}
   shopHeaderText: {fileID: 123579513}
   offerRoot: {fileID: 334905769}
-  offerButtonPrefab: {fileID: 4519505260692412030, guid: 999015d0e13b2aa42a02d1a774e2c422, type: 3}
+  offerButtonPrefab: {fileID: 4519505260692412030, guid: 1f443f721a47d4d3ca68ab72c2fb3863, type: 3}
   ownedRoot: {fileID: 1696645248}
   ownedButtonPrefab: {fileID: 4519505260692412030, guid: b0f071b57a540684ea5d6da84d424c3b, type: 3}
   rerollButton: {fileID: 509776082}
@@ -3583,8 +3583,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1696645248}
-  - component: {fileID: 1696645250}
   - component: {fileID: 1696645249}
+  - component: {fileID: 1696645250}
   m_Layer: 5
   m_Name: OwnedRoot
   m_TagString: Untagged
@@ -3608,8 +3608,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 147.92084, y: 2}
-  m_SizeDelta: {x: 264.1583, y: 250}
+  m_AnchoredPosition: {x: 0, y: -61.5}
+  m_SizeDelta: {x: 560, y: 123}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1696645249
 MonoBehaviour:
@@ -3634,15 +3634,15 @@ MonoBehaviour:
   m_GameObject: {fileID: 1696645247}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 59f8146938fff824cb5fd77236b75775, type: 3}
+  m_Script: {fileID: 11500000, guid: 30649d3a9faa99c48a7b1166b86bf2a0, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.VerticalLayoutGroup
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.HorizontalLayoutGroup
   m_Padding:
     m_Left: 0
     m_Right: 0
     m_Top: 0
     m_Bottom: 0
-  m_ChildAlignment: 1
+  m_ChildAlignment: 0
   m_Spacing: 0
   m_ChildForceExpandWidth: 1
   m_ChildForceExpandHeight: 1
@@ -4907,7 +4907,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 6694f6fe7f593174e8be32eb5b9ffe77, type: 2}
   - {fileID: 11400000, guid: 06ff62bc4c455f74d88f3b91620f9f79, type: 2}
   playerBaseHp: 40
-  tierUpDiscountStartTurn: 1
   tierUpDiscountPerTurn: 1
   tierUpMinCost: 0
 --- !u!4 &2112705437

@@ -12,8 +12,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6593e2fbcd179dd4da437e9e4a18761c, type: 3}
   m_Name: Fire3
   m_EditorClassIdentifier: Assembly-CSharp::SkillData
+  skillId: fire_3
   skillName: Fire3
-  type: 0
   attack: 6
   block: 3
+  type: 0
   tag: 0
+  grade: 3
+  shopOnlyBase: 1
+  evolveTier: 1
+  effectType: 1
+  effectValue: 1
