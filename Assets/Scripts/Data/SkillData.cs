@@ -26,6 +26,14 @@ public enum SkillGrade
     G6 = 6
 }
 
+public enum SkillEffectType
+{
+    None,
+    GrowAttackPermanent,   // 使用するたび 永続で攻撃+X
+    GrowAttackThisBattle,  // 使用するたび このバトル中だけ攻撃+X
+}
+
+
 [CreateAssetMenu(menuName = "Proto/Skill")]
 public class SkillData : ScriptableObject
 {
@@ -49,4 +57,11 @@ public class SkillData : ScriptableObject
 
     [Header("Evolve")]
     public int evolveTier = 1; // 1=通常、2=トリプル後…
+
+    [Header("Effect")]
+    public SkillEffectType effectType = SkillEffectType.None;
+
+    // GrowAttack系の増加量（+1, +2 など）
+    public int effectValue = 1;
+
 }

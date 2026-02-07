@@ -20,16 +20,16 @@ public static class MonsterRecordFactory
         foreach (var s in monster.skills)
         {
             if (s == null) continue;
-            if (string.IsNullOrEmpty(s.skillId)) continue;
+            if (string.IsNullOrEmpty(s.SkillId)) continue;
 
-            record.skillIds.Add(s.skillId);
+            record.skillIds.Add(s.SkillId);
 
-            if (!record.typeCount.ContainsKey(s.type))
-                record.typeCount[s.type] = 0;
-            record.typeCount[s.type]++;
+            if (!record.typeCount.ContainsKey(s.Type))
+                record.typeCount[s.Type] = 0;
+            record.typeCount[s.Type]++;
 
-            if (s.tag == SkillTag.Stable) record.stableCount++;
-            if (s.tag == SkillTag.Cooldown) record.cooldownCount++;
+            if (s.Tag == SkillTag.Stable) record.stableCount++;
+            if (s.Tag == SkillTag.Cooldown) record.cooldownCount++;
         }
 
         return record;

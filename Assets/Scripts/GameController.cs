@@ -22,9 +22,6 @@ public class GameController : MonoBehaviour
     // ===== Tier Upgrade Discount (per turn) =====
     [Header("Tier Upgrade Discount")]
     [SerializeField]
-    private int tierUpDiscountStartTurn = 1; // 何ターン目から割引開始するか
-
-    [SerializeField]
     private int tierUpDiscountPerTurn = 1; // 1ターンごとに何コスト下がるか
 
     [SerializeField]
@@ -203,7 +200,7 @@ public class GameController : MonoBehaviour
 
         if (player.skills.Count >= 7)
             player.skills.RemoveAt(0);
-        player.skills.Add(s);
+        player.skills.Add(new SkillInstance(s));
 
         // トリプルがあるならここで
         TryTriple(player);
@@ -244,6 +241,8 @@ public class GameController : MonoBehaviour
         var enemy = Monster.FromPreset(preset);
 
         player.hp = player.maxHp;
+        player.ResetBattleState();
+        enemy.ResetBattleState();
 
         ui.ShowBattleStart(preset.enemyName, player.hp, enemy.hp);
         StartCoroutine(BattleLoop(player, enemy));
@@ -295,29 +294,29 @@ public class GameController : MonoBehaviour
         int n = atkM.skills.Count;
         int k = Mathf.CeilToInt(n / 2f);
 
-        var pool = new List<SkillData>();
-        foreach (var s in atkM.skills)
+        var pool = new List<SkillInstance>();
+        foreach (var inst in atkM.skills)
         {
-            if (s == null)
+            if (inst == null || inst.data == null)
                 continue;
 
             // Cooldown(1)：前ターンに引いたら次ターン除外
             if (
-                s.tag == SkillTag.Cooldown
-                && !string.IsNullOrEmpty(s.skillId)
-                && cdBlockedNextTurn.Contains(s.skillId)
+                inst.Tag == SkillTag.Cooldown
+                && !string.IsNullOrEmpty(inst.SkillId)
+                && cdBlockedNextTurn.Contains(inst.SkillId)
             )
                 continue;
 
-            pool.Add(s);
+            pool.Add(inst);
         }
 
-        var picked = new List<SkillData>();
+        var picked = new List<SkillInstance>();
 
         // Stable優先
         foreach (var s in pool)
         {
-            if (s.tag == SkillTag.Stable && picked.Count < k)
+            if (s.Tag == SkillTag.Stable && picked.Count < k)
                 picked.Add(s);
         }
 
@@ -334,9 +333,12 @@ public class GameController : MonoBehaviour
             def = 0;
         foreach (var s in picked)
         {
-            atk += s.attack;
-            def += s.block;
+            atk += s.Attack;
+            def += s.Block;
         }
+
+        foreach (var s in picked)
+            s.OnUse();
 
         int fatigue = Mathf.Max(0, t - 4);
         int damage = Mathf.Max(0, atk - def) + fatigue;
@@ -347,11 +349,11 @@ public class GameController : MonoBehaviour
         cdBlockedNextTurn.Clear();
         foreach (var s in picked)
         {
-            if (s.tag == SkillTag.Cooldown && !string.IsNullOrEmpty(s.skillId))
-                cdBlockedNextTurn.Add(s.skillId);
+            if (s.Tag == SkillTag.Cooldown && !string.IsNullOrEmpty(s.SkillId))
+                cdBlockedNextTurn.Add(s.SkillId);
         }
 
-        return (string.Join(", ", picked.Select(x => x.skillName)), atk, def, fatigue, damage);
+        return (string.Join(", ", picked.Select(x => x.Name)), atk, def, fatigue, damage);
     }
 
 // ===== Triple =====
@@ -369,9 +371,9 @@ private void TryTriple(Monster m)
         for (int i = 0; i < m.skills.Count; i++)
         {
             var s = m.skills[i];
-            if (s == null || string.IsNullOrEmpty(s.skillId)) continue;
+            if (s == null || string.IsNullOrEmpty(s.SkillId)) continue;
 
-            GetBaseAndTier(s.skillId, out var baseId, out var tier);
+            GetBaseAndTier(s.SkillId, out var baseId, out var tier);
 
             string key = $"{baseId}|{tier}";
             if (!buckets.TryGetValue(key, out var list))
@@ -427,7 +429,7 @@ private void TryTriple(Monster m)
         m.skills.RemoveAt(a);
 
         // 進化を追加（位置は末尾でOK。位置を維持したいなら a に Insert してもよい）
-        m.skills.Add(evolved);
+        m.skills.Add(new SkillInstance(evolved));
 
         // ここで次の while 周回で連鎖チェック
     }

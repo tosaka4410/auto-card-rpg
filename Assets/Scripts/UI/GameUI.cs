@@ -69,7 +69,7 @@ public class GameUI : MonoBehaviour
         int sellGain,
         int upgradeCost,
         IReadOnlyList<SkillData> offers,
-        IReadOnlyList<SkillData> owned,
+        IReadOnlyList<SkillInstance> owned,
         Action<int> onBuyOffer,
         Action onReroll,
         Action onUpgrade,
@@ -99,7 +99,7 @@ public class GameUI : MonoBehaviour
             offers?.Count ?? 0,
             (i, btn) =>
             {
-                var s = offers[i];
+                var s = new SkillInstance(offers[i]);
                 string label = FormatSkillLine(s, prefix: $"BUY(-{buyCost}) ");
                 if (shopFrozen) label = "[F] " + label;
 
@@ -280,16 +280,18 @@ public class GameUI : MonoBehaviour
         }
     }
 
-    private string FormatSkillLine(SkillData s, string prefix)
-    {
-        if (s == null) return prefix + "(EMPTY)";
+private string FormatSkillLine(SkillInstance s, string prefix)
+{
+    if (s == null || s.data == null) return prefix + "(EMPTY)";
 
-        string g = ((int)s.grade).ToString();
-        string tag = (s.tag != SkillTag.None) ? $"[{s.tag}]" : "";
-        string type = s.type.ToString();
+    string g = ((int)s.Grade).ToString();
+    string tag = (s.Tag != SkillTag.None) ? $"[{s.Tag}]" : "";
+    string type = s.Type.ToString();
 
-        return $"{prefix}{s.skillName} (G{g}) {tag}  A:{s.attack} B:{s.block}  <{type}>";
-    }
+    // ★補正込みの値で表示
+    return $"{prefix}{s.Name} (G{g}) {tag}  A:{s.Attack} B:{s.Block}  <{type}>";
+}
+
 
     private void SetButtonLabel(Button btn, string label)
     {

@@ -5,7 +5,7 @@ public class Monster
 {
     public int maxHp;
     public int hp;
-    public List<SkillData> skills = new();
+    public List<SkillInstance> skills = new();
 
     public Monster(int maxHp)
     {
@@ -17,7 +17,13 @@ public class Monster
     {
         var m = new Monster(preset.maxHp);
         if (preset.skills != null)
-            m.skills.AddRange(preset.skills);
+        {
+            foreach (var s in preset.skills)
+            {
+                if (s == null) continue;
+                m.skills.Add(new SkillInstance(s));
+            }
+        }
         return m;
     }
 
@@ -44,7 +50,7 @@ public class Monster
             // 1) まず辞書直引き（ベーススキルが入っている想定）
             if (skillDict != null && skillDict.TryGetValue(id, out var skill))
             {
-                m.skills.Add(skill);
+                m.skills.Add(new SkillInstance(skill));
                 continue;
             }
 
@@ -54,7 +60,7 @@ public class Monster
                 if (skillDict != null && skillDict.TryGetValue(baseId, out var baseSkill))
                 {
                     var evolved = SkillRuntimeFactory.CreateEvolvedFromBase(baseSkill, id, tier);
-                    m.skills.Add(evolved);
+                    m.skills.Add(new SkillInstance(evolved));
                     continue;
                 }
 
@@ -66,9 +72,16 @@ public class Monster
             }
 
             // 3) 最後の保険：Unknownとして生成
-            m.skills.Add(SkillRuntimeFactory.CreateUnknownFallback(id));
+            m.skills.Add(new SkillInstance(SkillRuntimeFactory.CreateUnknownFallback(id)));
         }
 
         return m;
     }
+
+    public void ResetBattleState()
+{
+    foreach (var s in skills)
+        s?.ResetBattleBonuses();
+}
+
 }
