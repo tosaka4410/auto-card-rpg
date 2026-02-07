@@ -39,6 +39,15 @@ public class GameUI : MonoBehaviour
     [SerializeField] private Text statText;
     [SerializeField] private Text logText;
 
+    [Header("Battle - Picked Cards")]
+[SerializeField] private Transform playerAllRoot;
+[SerializeField] private Transform enemyAllRoot;
+[SerializeField] private GameObject battleCardPrefab;
+
+private readonly List<GameObject> playerCards = new();
+private readonly List<GameObject> enemyCards = new();
+
+
     private readonly List<Button> offerButtons = new();
     private readonly List<Button> ownedButtons = new();
 
@@ -176,28 +185,33 @@ public class GameUI : MonoBehaviour
         if (nextButton != null) nextButton.gameObject.SetActive(false);
     }
 
-    public void ShowBattleStart(string enemyName, int playerHp, int enemyHp)
-    {
-        SetPanel(shop: false);
+public void ShowBattleStart(string enemyName, int playerHp, int enemyHp)
+{
+    SetPanel(shop: false);
 
-        if (battleHeaderText != null) battleHeaderText.text = $"BATTLE vs {enemyName}";
-        if (hpText != null) hpText.text = $"P:{playerHp}  E:{enemyHp}";
+    if (battleHeaderText != null) battleHeaderText.text = $"BATTLE vs {enemyName}";
+    if (hpText != null) hpText.text = $"P:{playerHp}  E:{enemyHp}";
 
-        if (pickedText != null) pickedText.text = "";
-        if (statText != null) statText.text = "";
-        if (logText != null) logText.text = "";
+    if (pickedText != null) pickedText.text = "";
+    if (statText != null) statText.text = "";
+    if (logText != null) logText.text = "";
 
-        if (nextButton != null) nextButton.gameObject.SetActive(false);
-    }
+    // ★カード表示を初期化
+
+    if (nextButton != null) nextButton.gameObject.SetActive(false);
+}
+
 
     public void UpdateBattleTurn(
         int turn,
         int playerHp,
         int enemyHp,
-        string playerPickedNames,
+        IReadOnlyList<SkillInstance> playerAll,
+        IReadOnlyList<int> playerPickedIdx,
         int playerAtk,
         int playerDef,
-        string enemyPickedNames,
+        IReadOnlyList<SkillInstance> enemyAll,
+        IReadOnlyList<int> enemyPickedIdx,
         int enemyAtk,
         int enemyDef,
         int fatigue,
@@ -208,12 +222,21 @@ public class GameUI : MonoBehaviour
         if (battleHeaderText != null) battleHeaderText.text = $"TURN {turn}";
         if (hpText != null) hpText.text = $"P:{playerHp}  E:{enemyHp}";
 
-        if (pickedText != null)
-        {
-            pickedText.text =
-                $"PLAYER PICKED:\n{playerPickedNames}\n\n" +
-                $"ENEMY PICKED:\n{enemyPickedNames}";
-        }
+// HP/ステータス表示はそのまま（省略）
+
+// 1) カード数を確保
+EnsureCardList(playerAllRoot, battleCardPrefab, playerCards, playerAll?.Count ?? 0);
+EnsureCardList(enemyAllRoot, battleCardPrefab, enemyCards, enemyAll?.Count ?? 0);
+
+// 2) 全カードをBind（成長反映）
+BindAllCards(playerCards, playerAll);
+BindAllCards(enemyCards, enemyAll);
+
+// 3) picked だけアニメ
+AnimatePicked(playerCards, playerPickedIdx);
+AnimatePicked(enemyCards, enemyPickedIdx);
+
+
 
         if (statText != null)
         {
@@ -280,6 +303,36 @@ public class GameUI : MonoBehaviour
         }
     }
 
+    private void RebuildCards(
+    Transform root,
+    GameObject prefab,
+    List<GameObject> cache,
+    IReadOnlyList<SkillInstance> picked
+)
+{
+    if (root == null || prefab == null) return;
+
+    int needed = picked?.Count ?? 0;
+
+    while (cache.Count < needed)
+    {
+        var go = Instantiate(prefab, root);
+        cache.Add(go);
+    }
+
+    for (int i = 0; i < cache.Count; i++)
+    {
+        bool active = i < needed;
+        cache[i].SetActive(active);
+
+        if (!active) continue;
+
+        var view = cache[i].GetComponent<CardView>();
+        if (view != null) view.Bind(picked[i]);
+    }
+}
+
+
 private string FormatSkillLine(SkillInstance s, string prefix)
 {
     if (s == null || s.data == null) return prefix + "(EMPTY)";
@@ -299,4 +352,49 @@ private string FormatSkillLine(SkillInstance s, string prefix)
         var t = btn.GetComponentInChildren<Text>();
         if (t != null) t.text = label;
     }
+
+    private void EnsureCardList(
+    Transform root,
+    GameObject prefab,
+    List<GameObject> cache,
+    int needed
+)
+{
+    if (root == null || prefab == null) return;
+
+    while (cache.Count < needed)
+    {
+        cache.Add(Instantiate(prefab, root));
+    }
+
+    for (int i = 0; i < cache.Count; i++)
+        cache[i].SetActive(i < needed);
+}
+
+private void BindAllCards(List<GameObject> cache, IReadOnlyList<SkillInstance> skills)
+{
+    int n = skills?.Count ?? 0;
+    for (int i = 0; i < n; i++)
+    {
+        var view = cache[i].GetComponent<CardView>();
+        if (view != null) view.Bind(skills[i]);
+
+        // picked 表示を一旦OFF
+        var anim = cache[i].GetComponent<BattleCardAnim>();
+        if (anim != null) anim.SetPicked(false);
+    }
+}
+
+private void AnimatePicked(List<GameObject> cache, IReadOnlyList<int> pickedIdx)
+{
+    if (pickedIdx == null) return;
+
+    foreach (var idx in pickedIdx)
+    {
+        if (idx < 0 || idx >= cache.Count) continue;
+        var anim = cache[idx].GetComponent<BattleCardAnim>();
+        if (anim != null) anim.PlayPicked();
+    }
+}
+
 }

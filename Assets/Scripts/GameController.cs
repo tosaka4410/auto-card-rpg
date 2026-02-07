@@ -263,98 +263,93 @@ public class GameController : MonoBehaviour
             var e = ResolveTurn(enemy, myMonster, t, enemyCooldownBlocked);
 
             ui.UpdateBattleTurn(
-                t,
-                myMonster.hp,
-                enemy.hp,
-                p.pickedNames,
-                p.atk,
-                p.def,
-                e.pickedNames,
-                e.atk,
-                e.def,
-                p.fatigue,
-                p.damage,
-                e.damage
+    t,
+    myMonster.hp,
+    enemy.hp,
+    myMonster.skills, p.pickedIdx, p.atk, p.def,
+    enemy.skills, e.pickedIdx, e.atk, e.def,
+    p.fatigue,
+    p.damage,
+    e.damage
             );
 
-            yield return new WaitForSeconds(0.35f);
+            yield return new WaitForSeconds(1.0f);
         }
 
         bool win = myMonster.hp > 0;
         ui.ShowBattleEnd(win); // Nextボタンで StartNextTurn
     }
 
-    private (string pickedNames, int atk, int def, int fatigue, int damage) ResolveTurn(
-        Monster atkM,
-        Monster defM,
-        int t,
-        HashSet<string> cdBlockedNextTurn
-    )
+private (List<int> pickedIdx, int atk, int def, int fatigue, int damage) ResolveTurn(
+    Monster atkM,
+    Monster defM,
+    int t,
+    HashSet<string> cdBlockedNextTurn
+)
+{
+    int n = atkM.skills.Count;
+    int k = Mathf.CeilToInt(n / 2f);
+
+    // pool を (index, inst) で保持する
+    var pool = new List<(int idx, SkillInstance inst)>();
+    for (int i = 0; i < atkM.skills.Count; i++)
     {
-        int n = atkM.skills.Count;
-        int k = Mathf.CeilToInt(n / 2f);
+        var inst = atkM.skills[i];
+        if (inst == null || inst.data == null) continue;
 
-        var pool = new List<SkillInstance>();
-        foreach (var inst in atkM.skills)
-        {
-            if (inst == null || inst.data == null)
-                continue;
+        // Cooldown(1)：前ターンに引いたら次ターン除外
+        if (inst.Tag == SkillTag.Cooldown &&
+            !string.IsNullOrEmpty(inst.SkillId) &&
+            cdBlockedNextTurn.Contains(inst.SkillId))
+            continue;
 
-            // Cooldown(1)：前ターンに引いたら次ターン除外
-            if (
-                inst.Tag == SkillTag.Cooldown
-                && !string.IsNullOrEmpty(inst.SkillId)
-                && cdBlockedNextTurn.Contains(inst.SkillId)
-            )
-                continue;
-
-            pool.Add(inst);
-        }
-
-        var picked = new List<SkillInstance>();
-
-        // Stable優先
-        foreach (var s in pool)
-        {
-            if (s.Tag == SkillTag.Stable && picked.Count < k)
-                picked.Add(s);
-        }
-
-        // 残りランダム
-        var rest = pool.Except(picked).ToList();
-        while (picked.Count < k && rest.Count > 0)
-        {
-            int idx = Random.Range(0, rest.Count);
-            picked.Add(rest[idx]);
-            rest.RemoveAt(idx);
-        }
-
-        int atk = 0,
-            def = 0;
-        foreach (var s in picked)
-        {
-            atk += s.Attack;
-            def += s.Block;
-        }
-
-        foreach (var s in picked)
-            s.OnUse();
-
-        int fatigue = Mathf.Max(0, t - 4);
-        int damage = Mathf.Max(0, atk - def) + fatigue;
-
-        defM.hp -= damage;
-
-        // 次ターン除外更新
-        cdBlockedNextTurn.Clear();
-        foreach (var s in picked)
-        {
-            if (s.Tag == SkillTag.Cooldown && !string.IsNullOrEmpty(s.SkillId))
-                cdBlockedNextTurn.Add(s.SkillId);
-        }
-
-        return (string.Join(", ", picked.Select(x => x.Name)), atk, def, fatigue, damage);
+        pool.Add((i, inst));
     }
+
+    var picked = new List<(int idx, SkillInstance inst)>();
+
+    // Stable優先
+    foreach (var p in pool)
+    {
+        if (p.inst.Tag == SkillTag.Stable && picked.Count < k)
+            picked.Add(p);
+    }
+
+    // 残りランダム
+    var rest = pool.Except(picked).ToList();
+    while (picked.Count < k && rest.Count > 0)
+    {
+        int r = Random.Range(0, rest.Count);
+        picked.Add(rest[r]);
+        rest.RemoveAt(r);
+    }
+
+    int atk = 0, def = 0;
+    foreach (var p in picked)
+    {
+        atk += p.inst.Attack;
+        def += p.inst.Block;
+    }
+
+    // ★使われたので効果発動
+    foreach (var p in picked)
+        p.inst.OnUse();
+
+    int fatigue = Mathf.Max(0, t - 4);
+    int damage = Mathf.Max(0, atk - def) + fatigue;
+    defM.hp -= damage;
+
+    // 次ターン除外更新
+    cdBlockedNextTurn.Clear();
+    foreach (var p in picked)
+    {
+        if (p.inst.Tag == SkillTag.Cooldown && !string.IsNullOrEmpty(p.inst.SkillId))
+            cdBlockedNextTurn.Add(p.inst.SkillId);
+    }
+
+    var pickedIdx = picked.Select(x => x.idx).ToList();
+    return (pickedIdx, atk, def, fatigue, damage);
+}
 
 // ===== Triple =====
 // 同一(baseId + tier)が3枚 → tier+1 を1枚生成して置き換える（連鎖あり）

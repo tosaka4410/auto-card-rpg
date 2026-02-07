@@ -168,8 +168,9 @@ GameObject:
   - component: {fileID: 3890353850138826655}
   - component: {fileID: 4519505260692412030}
   - component: {fileID: 4762173429726066483}
+  - component: {fileID: 373540316515242925}
   m_Layer: 5
-  m_Name: OwnedButtonPrefab 1
+  m_Name: BattleCardPrefab
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -296,6 +297,21 @@ MonoBehaviour:
   attackText: {fileID: 7484711893015332032}
   blockText: {fileID: 5801586373643208263}
   effectText: {fileID: 8583694781056043480}
+--- !u!114 &373540316515242925
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4238143939892259860}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 005ecf85d2c964bb7825b0e2c3029145, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BattleCardAnim
+  highlight: {fileID: 0}
+  popScale: 1.08
+  duration: 0.18
 --- !u!1 &5262512583849712444
 GameObject:
   m_ObjectHideFlags: 0
