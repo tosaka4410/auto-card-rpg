@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 398f8fbcbc60e4f0fa36dd193b5fc566, type: 3}
+  m_Name: GuardAchetype
+  m_EditorClassIdentifier: Assembly-CSharp::SkillArchetype
+  baseIdPrefix: fire
+  namePrefix: Fire
+  type: 0
+  baseAtk: 3
+  baseBlk: 0
+  minGrade: 1
+  maxGrade: 6
+  atkMulPerGrade: 1.25
+  blkMulPerGrade: 1.15
+  stableProb: 0.15
+  cooldownProb: 0.1
+  growAtkPermProb: 0.1
+  growAtkBattleProb: 0.1
+  effectValueMin: 1
+  effectValueMax: 2
+  variantsPerGrade: 3

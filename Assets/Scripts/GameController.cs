@@ -15,6 +15,11 @@ public class GameController : MonoBehaviour
     [Header("Enemy Presets (Training)")]
     public List<EnemyPreset> enemyPresets;
 
+    [Header("Auto Skill Generation")]
+    public List<SkillArchetype> archetypes;
+    [SerializeField] private bool useGeneratedPool = true;
+
+
     [Header("Config")]
     [SerializeField]
     private int playerBaseHp = 40;
@@ -60,11 +65,17 @@ public class GameController : MonoBehaviour
 
     void Start()
     {
+        if (useGeneratedPool)
+        {
+            skillPool = SkillPoolGenerator.Generate(archetypes);
+        }
+
+
         player = new Monster(playerBaseHp);
         skillDict = skillPool
-    .Where(s => s != null && !string.IsNullOrEmpty(s.skillId))
-    .GroupBy(s => s.skillId)
-    .ToDictionary(g => g.Key, g => g.First());
+            .Where(s => s != null && !string.IsNullOrEmpty(s.skillId))
+            .GroupBy(s => s.skillId)
+            .ToDictionary(g => g.Key, g => g.First());
 
 
         // バトル終了 → Next押下 → 次ターン開始
@@ -259,18 +270,27 @@ public class GameController : MonoBehaviour
         {
             t++;
 
-            var p = ResolveTurn(myMonster, enemy, t, myCooldownBlocked);
-            var e = ResolveTurn(enemy, myMonster, t, enemyCooldownBlocked);
+            var p = PickSkills(player, myCooldownBlocked);
+            var e = PickSkills(enemy, enemyCooldownBlocked);
+
+            int fatigue = Mathf.Max(0, t - 4);
+
+            int dmgToEnemy  = Mathf.Max(0, p.atk - e.blk) + fatigue;
+            int dmgToPlayer = Mathf.Max(0, e.atk - p.blk) + fatigue;
+
+            enemy.hp  -= dmgToEnemy;
+            player.hp -= dmgToPlayer;
+
 
             ui.UpdateBattleTurn(
-    t,
-    myMonster.hp,
-    enemy.hp,
-    myMonster.skills, p.pickedIdx, p.atk, p.def,
-    enemy.skills, e.pickedIdx, e.atk, e.def,
-    p.fatigue,
-    p.damage,
-    e.damage
+                t,
+                myMonster.hp,
+                enemy.hp,
+                myMonster.skills, p.pickedIdx, p.atk, p.blk,
+                enemy.skills, e.pickedIdx, e.atk, e.blk,
+                fatigue,
+                dmgToPlayer,
+                dmgToEnemy
             );
 
             yield return new WaitForSeconds(1.0f);
@@ -280,167 +300,149 @@ public class GameController : MonoBehaviour
         ui.ShowBattleEnd(win); // Nextボタンで StartNextTurn
     }
 
-private (List<int> pickedIdx, int atk, int def, int fatigue, int damage) ResolveTurn(
-    Monster atkM,
-    Monster defM,
-    int t,
-    HashSet<string> cdBlockedNextTurn
-)
-{
-    int n = atkM.skills.Count;
-    int k = Mathf.CeilToInt(n / 2f);
-
-    // pool を (index, inst) で保持する
-    var pool = new List<(int idx, SkillInstance inst)>();
-    for (int i = 0; i < atkM.skills.Count; i++)
+    private (List<int> pickedIdx, int atk, int blk) PickSkills(
+        Monster m,
+        HashSet<string> cdBlockedNextTurn
+    )
     {
-        var inst = atkM.skills[i];
-        if (inst == null || inst.data == null) continue;
+        int n = m.skills.Count;
+        int k = Mathf.CeilToInt(n / 2f);
 
-        // Cooldown(1)：前ターンに引いたら次ターン除外
-        if (inst.Tag == SkillTag.Cooldown &&
-            !string.IsNullOrEmpty(inst.SkillId) &&
-            cdBlockedNextTurn.Contains(inst.SkillId))
-            continue;
-
-        pool.Add((i, inst));
-    }
-
-    var picked = new List<(int idx, SkillInstance inst)>();
-
-    // Stable優先
-    foreach (var p in pool)
-    {
-        if (p.inst.Tag == SkillTag.Stable && picked.Count < k)
-            picked.Add(p);
-    }
-
-    // 残りランダム
-    var rest = pool.Except(picked).ToList();
-    while (picked.Count < k && rest.Count > 0)
-    {
-        int r = Random.Range(0, rest.Count);
-        picked.Add(rest[r]);
-        rest.RemoveAt(r);
-    }
-
-    int atk = 0, def = 0;
-    foreach (var p in picked)
-    {
-        atk += p.inst.Attack;
-        def += p.inst.Block;
-    }
-
-    // ★使われたので効果発動
-    foreach (var p in picked)
-        p.inst.OnUse();
-
-    int fatigue = Mathf.Max(0, t - 4);
-    int damage = Mathf.Max(0, atk - def) + fatigue;
-    defM.hp -= damage;
-
-    // 次ターン除外更新
-    cdBlockedNextTurn.Clear();
-    foreach (var p in picked)
-    {
-        if (p.inst.Tag == SkillTag.Cooldown && !string.IsNullOrEmpty(p.inst.SkillId))
-            cdBlockedNextTurn.Add(p.inst.SkillId);
-    }
-
-    var pickedIdx = picked.Select(x => x.idx).ToList();
-    return (pickedIdx, atk, def, fatigue, damage);
-}
-
-// ===== Triple =====
-// 同一(baseId + tier)が3枚 → tier+1 を1枚生成して置き換える（連鎖あり）
-private void TryTriple(Monster m)
-{
-    if (m == null || m.skills == null || m.skills.Count == 0) return;
-
-    // 連鎖するので while で回す
-    while (true)
-    {
-        // key = $"{baseId}|{tier}"
-        var buckets = new Dictionary<string, List<int>>();
-
+        var pool = new List<(int idx, SkillInstance inst)>();
         for (int i = 0; i < m.skills.Count; i++)
         {
-            var s = m.skills[i];
-            if (s == null || string.IsNullOrEmpty(s.SkillId)) continue;
+            var inst = m.skills[i];
+            if (inst == null || inst.data == null) continue;
 
-            GetBaseAndTier(s.SkillId, out var baseId, out var tier);
+            if (inst.Tag == SkillTag.Cooldown &&
+                cdBlockedNextTurn.Contains(inst.SkillId))
+                continue;
 
-            string key = $"{baseId}|{tier}";
-            if (!buckets.TryGetValue(key, out var list))
-            {
-                list = new List<int>();
-                buckets[key] = list;
-            }
-            list.Add(i);
+            pool.Add((i, inst));
         }
 
-        // どれか1つでも3枚以上あるか？
-        string foundKey = null;
-        List<int> idxs = null;
+        var picked = new List<(int idx, SkillInstance inst)>();
 
-        foreach (var kv in buckets)
+        foreach (var p in pool)
+            if (p.inst.Tag == SkillTag.Stable && picked.Count < k)
+                picked.Add(p);
+
+        var rest = pool.Except(picked).ToList();
+        while (picked.Count < k && rest.Count > 0)
         {
-            if (kv.Value.Count >= 3)
+            int r = Random.Range(0, rest.Count);
+            picked.Add(rest[r]);
+            rest.RemoveAt(r);
+        }
+
+        int atk = 0, blk = 0;
+        foreach (var p in picked)
+        {
+            atk += p.inst.Attack;
+            blk += p.inst.Block;
+        }
+
+        foreach (var p in picked)
+            p.inst.OnUse();
+
+        cdBlockedNextTurn.Clear();
+        foreach (var p in picked)
+            if (p.inst.Tag == SkillTag.Cooldown)
+                cdBlockedNextTurn.Add(p.inst.SkillId);
+
+        return (picked.Select(x => x.idx).ToList(), atk, blk);
+    }
+
+    // ===== Triple =====
+    // 同一(baseId + tier)が3枚 → tier+1 を1枚生成して置き換える（連鎖あり）
+    private void TryTriple(Monster m)
+    {
+        if (m == null || m.skills == null || m.skills.Count == 0) return;
+
+        // 連鎖するので while で回す
+        while (true)
+        {
+            // key = $"{baseId}|{tier}"
+            var buckets = new Dictionary<string, List<int>>();
+
+            for (int i = 0; i < m.skills.Count; i++)
             {
-                foundKey = kv.Key;
-                idxs = kv.Value;
+                var s = m.skills[i];
+                if (s == null || string.IsNullOrEmpty(s.SkillId)) continue;
+
+                GetBaseAndTier(s.SkillId, out var baseId, out var tier);
+
+                string key = $"{baseId}|{tier}";
+                if (!buckets.TryGetValue(key, out var list))
+                {
+                    list = new List<int>();
+                    buckets[key] = list;
+                }
+                list.Add(i);
+            }
+
+            // どれか1つでも3枚以上あるか？
+            string foundKey = null;
+            List<int> idxs = null;
+
+            foreach (var kv in buckets)
+            {
+                if (kv.Value.Count >= 3)
+                {
+                    foundKey = kv.Key;
+                    idxs = kv.Value;
+                    break;
+                }
+            }
+
+            if (foundKey == null) break; // もうトリプルなし
+
+            // foundKey を分解
+            var parts = foundKey.Split('|');
+            string baseIdFound = parts[0];
+            int tierFound = int.Parse(parts[1]);
+
+            int nextTier = tierFound + 1;
+            string evolvedId = $"{baseIdFound}_t{nextTier}";
+
+            // ベース参照（進化生成は baseSkill が必要）
+            if (skillDict == null || !skillDict.TryGetValue(baseIdFound, out var baseSkill) || baseSkill == null)
+            {
+                Debug.LogWarning($"TryTriple: base skill not found: {baseIdFound}");
                 break;
             }
+
+            // 進化スキル生成
+            var evolved = SkillRuntimeFactory.CreateEvolvedFromBase(baseSkill, evolvedId, nextTier);
+
+            // 3枚消す（インデックスがズレないように降順）
+            idxs.Sort();
+            int a = idxs[0];
+            int b = idxs[1];
+            int c = idxs[2];
+
+            m.skills.RemoveAt(c);
+            m.skills.RemoveAt(b);
+            m.skills.RemoveAt(a);
+
+            // 進化を追加（位置は末尾でOK。位置を維持したいなら a に Insert してもよい）
+            m.skills.Add(new SkillInstance(evolved));
+
+            // ここで次の while 周回で連鎖チェック
         }
-
-        if (foundKey == null) break; // もうトリプルなし
-
-        // foundKey を分解
-        var parts = foundKey.Split('|');
-        string baseIdFound = parts[0];
-        int tierFound = int.Parse(parts[1]);
-
-        int nextTier = tierFound + 1;
-        string evolvedId = $"{baseIdFound}_t{nextTier}";
-
-        // ベース参照（進化生成は baseSkill が必要）
-        if (skillDict == null || !skillDict.TryGetValue(baseIdFound, out var baseSkill) || baseSkill == null)
-        {
-            Debug.LogWarning($"TryTriple: base skill not found: {baseIdFound}");
-            break;
-        }
-
-        // 進化スキル生成
-        var evolved = SkillRuntimeFactory.CreateEvolvedFromBase(baseSkill, evolvedId, nextTier);
-
-        // 3枚消す（インデックスがズレないように降順）
-        idxs.Sort();
-        int a = idxs[0];
-        int b = idxs[1];
-        int c = idxs[2];
-
-        m.skills.RemoveAt(c);
-        m.skills.RemoveAt(b);
-        m.skills.RemoveAt(a);
-
-        // 進化を追加（位置は末尾でOK。位置を維持したいなら a に Insert してもよい）
-        m.skills.Add(new SkillInstance(evolved));
-
-        // ここで次の while 周回で連鎖チェック
     }
-}
 
-// skillId から baseId/tier を取り出す（ベースは tier=1 扱い）
-private static void GetBaseAndTier(string skillId, out string baseId, out int tier)
-{
-    baseId = skillId;
-    tier = 1;
-
-    if (SkillRuntimeFactory.TryParseEvolvedId(skillId, out var b, out var t))
+    // skillId から baseId/tier を取り出す（ベースは tier=1 扱い）
+    private static void GetBaseAndTier(string skillId, out string baseId, out int tier)
     {
-        baseId = b;
-        tier = Mathf.Max(1, t);
+        baseId = skillId;
+        tier = 1;
+
+        if (SkillRuntimeFactory.TryParseEvolvedId(skillId, out var b, out var t))
+        {
+            baseId = b;
+            tier = Mathf.Max(1, t);
+        }
     }
-}
 
 }
