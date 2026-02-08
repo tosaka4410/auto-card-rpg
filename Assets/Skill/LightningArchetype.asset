@@ -12,15 +12,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 398f8fbcbc60e4f0fa36dd193b5fc566, type: 3}
   m_Name: LightningArchetype
   m_EditorClassIdentifier: Assembly-CSharp::SkillArchetype
-  baseIdPrefix: fire
-  namePrefix: Fire
-  type: 0
-  baseAtk: 3
-  baseBlk: 0
+  baseIdPrefix: lightning
+  namePrefix: Lightning
+  type: 1
+  baseAtk: 2
+  baseBlk: 2
   minGrade: 1
   maxGrade: 6
-  atkMulPerGrade: 1.25
-  blkMulPerGrade: 1.15
+  atkMulPerGrade: 1.2
+  blkMulPerGrade: 1.2
   stableProb: 0.15
   cooldownProb: 0.1
   growAtkPermProb: 0.1

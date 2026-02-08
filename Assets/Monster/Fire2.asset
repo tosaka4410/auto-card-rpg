@@ -10,11 +10,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5aeb978bf302e0a4b8b8ee954a37e541, type: 3}
-  m_Name: Balanced
+  m_Name: Fire2
   m_EditorClassIdentifier: Assembly-CSharp::EnemyPreset
-  enemyName: Balanced
-  maxHp: 50
-  skills:
-  - {fileID: 11400000, guid: 5aed642246ccf7f49bf5f43a0038d206, type: 2}
-  - {fileID: 11400000, guid: 73c3c0f04d8e3a047b154667de36e766, type: 2}
-  - {fileID: 11400000, guid: 9aba1fa247c16314ebb0597848bcaa7a, type: 2}
+  enemyName: 
+  recommendedTurn: 3
+  maxHp: 40
+  skills: []

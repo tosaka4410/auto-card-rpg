@@ -488,7 +488,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &211879713
 RectTransform:
   m_ObjectHideFlags: 0
@@ -3589,7 +3589,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1690016929
 RectTransform:
   m_ObjectHideFlags: 0
@@ -5062,9 +5062,20 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 5fa5a77a84b2e3547b9d1a39be4deb77, type: 2}
   - {fileID: 11400000, guid: d84d336554d79a845aa1056be90f940f, type: 2}
   enemyPresets:
+  - {fileID: 11400000, guid: b15929268afd04dcfa3e5ad5023ab308, type: 2}
+  - {fileID: 11400000, guid: d3e4d8fe3fe5641b489729496f37d93d, type: 2}
   - {fileID: 11400000, guid: 6ce6cafd961b5d3418f0cc1cd5c49fdd, type: 2}
+  - {fileID: 11400000, guid: 0db99b0015ff14c4699ff80e919be113, type: 2}
+  - {fileID: 11400000, guid: 991be3f966d064cc8a24d9730dd8da6f, type: 2}
   - {fileID: 11400000, guid: 6694f6fe7f593174e8be32eb5b9ffe77, type: 2}
+  - {fileID: 11400000, guid: 54613bc33d3ea48928f26f21ca6f13d5, type: 2}
+  - {fileID: 11400000, guid: 8de43866c0a7649fc8026e7101ae8873, type: 2}
   - {fileID: 11400000, guid: 06ff62bc4c455f74d88f3b91620f9f79, type: 2}
+  archetypes:
+  - {fileID: 11400000, guid: 00f7f7760e4f2404f92df009586ccd3b, type: 2}
+  - {fileID: 11400000, guid: c7dabfdaa10124005b0dbe85c4d5edac, type: 2}
+  - {fileID: 11400000, guid: d7f627666f41c4b5d8e2359f03df7395, type: 2}
+  useGeneratedPool: 1
   playerBaseHp: 40
   tierUpDiscountPerTurn: 1
   tierUpMinCost: 0

@@ -69,7 +69,7 @@ private readonly List<GameObject> enemyCards = new();
     /// BG風 酒場（全体Freeze / 購入しても補充しない / 補充はリロールのみ）
     /// </summary>
     public void ShowShop_BG_AllFreeze(
-        int turn,
+        int round,
         int tier,
         int coins,
         bool shopFrozen,
@@ -92,7 +92,7 @@ private readonly List<GameObject> enemyCards = new();
         if (shopHeaderText != null)
         {
             shopHeaderText.text =
-                $"TURN: {turn}\n" +
+                $"ROUND: {round}\n" +
                 $"TIER: {tier}\n" +
                 $"COINS: {coins}\n" +
                 $"UPGRADE: {(tier >= 6 ? "-" : upgradeCost)}\n" +
@@ -172,13 +172,13 @@ private readonly List<GameObject> enemyCards = new();
             SetButtonLabel(freezeButton, shopFrozen ? "UNFREEZE" : "FREEZE");
         }
 
-        // End Turn
+        // End Round
         if (endTurnButton != null)
         {
             endTurnButton.onClick.RemoveAllListeners();
             endTurnButton.onClick.AddListener(() => onEndTurn?.Invoke());
             endTurnButton.interactable = true;
-            SetButtonLabel(endTurnButton, "END TURN");
+            SetButtonLabel(endTurnButton, "END ROUND");
         }
 
         // Nextはショップでは基本非表示
@@ -203,7 +203,7 @@ public void ShowBattleStart(string enemyName, int playerHp, int enemyHp)
 
 
     public void UpdateBattleTurn(
-        int turn,
+        int round,
         int playerHp,
         int enemyHp,
         IReadOnlyList<SkillInstance> playerAll,
@@ -219,7 +219,7 @@ public void ShowBattleStart(string enemyName, int playerHp, int enemyHp)
         int damageToPlayer
     )
     {
-        if (battleHeaderText != null) battleHeaderText.text = $"TURN {turn}";
+        if (battleHeaderText != null) battleHeaderText.text = $"TURN {round}";
         if (hpText != null) hpText.text = $"P:{playerHp}  E:{enemyHp}";
 
 // HP/ステータス表示はそのまま（省略）
@@ -249,7 +249,7 @@ AnimatePicked(enemyCards, enemyPickedIdx);
         if (logText != null)
         {
             logText.text +=
-                $"T{turn}: P({playerAtk}-{playerDef})=>{damageToEnemy} / " +
+                $"T{round}: P({playerAtk}-{playerDef})=>{damageToEnemy} / " +
                 $"E({enemyAtk}-{enemyDef})=>{damageToPlayer} / F={fatigue}\n";
         }
     }

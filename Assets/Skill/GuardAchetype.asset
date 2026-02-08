@@ -12,15 +12,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 398f8fbcbc60e4f0fa36dd193b5fc566, type: 3}
   m_Name: GuardAchetype
   m_EditorClassIdentifier: Assembly-CSharp::SkillArchetype
-  baseIdPrefix: fire
-  namePrefix: Fire
-  type: 0
-  baseAtk: 3
-  baseBlk: 0
+  baseIdPrefix: guard
+  namePrefix: Guard
+  type: 2
+  baseAtk: 1
+  baseBlk: 4
   minGrade: 1
   maxGrade: 6
-  atkMulPerGrade: 1.25
-  blkMulPerGrade: 1.15
+  atkMulPerGrade: 1.15
+  blkMulPerGrade: 1.25
   stableProb: 0.15
   cooldownProb: 0.1
   growAtkPermProb: 0.1

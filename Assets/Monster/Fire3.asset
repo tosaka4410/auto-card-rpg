@@ -10,9 +10,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5aeb978bf302e0a4b8b8ee954a37e541, type: 3}
-  m_Name: Attack
+  m_Name: Fire3
   m_EditorClassIdentifier: Assembly-CSharp::EnemyPreset
   enemyName: Attack
+  recommendedTurn: 5
   maxHp: 40
   skills:
   - {fileID: 11400000, guid: 2f0a552b5a9e7474cb10049910ef8827, type: 2}

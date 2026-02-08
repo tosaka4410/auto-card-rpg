@@ -24,7 +24,7 @@ public class GameController : MonoBehaviour
     [SerializeField]
     private int playerBaseHp = 40;
 
-    // ===== Tier Upgrade Discount (per turn) =====
+    // ===== Tier Upgrade Discount (per round) =====
     [Header("Tier Upgrade Discount")]
     [SerializeField]
     private int tierUpDiscountPerTurn = 1; // 1ターンごとに何コスト下がるか
@@ -42,7 +42,7 @@ public class GameController : MonoBehaviour
 
 
     // BG風：ターン制酒場
-    private int turn = 0;
+    private int round = 0;
     private int coins = 0;
 
     // 最後にアップグレードしたターン（割引リセット基準）
@@ -88,10 +88,10 @@ public class GameController : MonoBehaviour
 
     void StartNextTurn()
     {
-        turn++;
+        round++;
 
         // コイン支給：Turn1=3, Turn2=4 ... Turn8以降=10
-        coins = Mathf.Min(10, 2 + turn);
+        coins = Mathf.Min(10, 2 + round);
 
         // Tierに応じたスロット数
         EnsureOfferSlots(offerCountByTier[shopTier]);
@@ -117,7 +117,7 @@ public class GameController : MonoBehaviour
         // ★ここはあなたの GameUI の関数名に合わせてください
         // 例：ShowShop_BG_AllFreeze(...) を実装していない場合、既存のShowShopに寄せる必要があります
         ui.ShowShop_BG_AllFreeze(
-            turn: turn,
+            round: round,
             tier: shopTier,
             coins: coins,
             shopFrozen: shopFrozen,
@@ -169,7 +169,7 @@ public class GameController : MonoBehaviour
         shopTier++;
 
         // ★割引リセット：このターンを基準にする
-        lastUpgradeTurn = turn;
+        lastUpgradeTurn = round;
 
         EnsureOfferSlots(offerCountByTier[shopTier]);
 
@@ -186,7 +186,7 @@ public class GameController : MonoBehaviour
 
         // 「最後のアップグレード」以降の経過ターンで割引が増える
         // 例：アップグレード直後の同ターンは0、次ターンから1…
-        int turnsSinceUpgrade = Mathf.Max(0, turn - lastUpgradeTurn);
+        int turnsSinceUpgrade = Mathf.Max(0, round - lastUpgradeTurn);
 
         int discount = turnsSinceUpgrade * tierUpDiscountPerTurn;
 
@@ -248,7 +248,11 @@ public class GameController : MonoBehaviour
             return;
         }
 
-        var preset = enemyPresets[Random.Range(0, enemyPresets.Count)];
+        var candidates = enemyPresets
+            .OrderBy(p => Mathf.Abs(p.recommendedRound - round))
+            .Take(3) // 推奨ターンが近いものを３個
+            .ToList();
+        var preset = candidates[Random.Range(0, candidates.Count)];
         var enemy = Monster.FromPreset(preset);
 
         player.hp = player.maxHp;

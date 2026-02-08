@@ -10,11 +10,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5aeb978bf302e0a4b8b8ee954a37e541, type: 3}
-  m_Name: Defense
+  m_Name: Lightning3
   m_EditorClassIdentifier: Assembly-CSharp::EnemyPreset
-  enemyName: Defense
-  maxHp: 60
+  enemyName: Balanced
+  recommendedTurn: 5
+  maxHp: 50
   skills:
-  - {fileID: 11400000, guid: 1c735211bfdf3394f8a665eb1e8522f9, type: 2}
-  - {fileID: 11400000, guid: 5fa5a77a84b2e3547b9d1a39be4deb77, type: 2}
-  - {fileID: 11400000, guid: d84d336554d79a845aa1056be90f940f, type: 2}
+  - {fileID: 11400000, guid: 5aed642246ccf7f49bf5f43a0038d206, type: 2}
+  - {fileID: 11400000, guid: 73c3c0f04d8e3a047b154667de36e766, type: 2}
+  - {fileID: 11400000, guid: 9aba1fa247c16314ebb0597848bcaa7a, type: 2}
